@@ -1,0 +1,22 @@
+[package]
+name = "stake_pool"
+version = "0.0.1"
+authors = ["TODOTO"]
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+path = "./source/lib.rs"
+
+[profile.release]
+codegen-units = 1
+opt-level = "s"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+[dependencies]
+near-contract-standards = { version = "4.0.0", default-features = false }
+near-sdk = { version = "4.0.0", default-features = false }
+uint = { version = "0.9.3", default-features = false }
