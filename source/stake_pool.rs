@@ -128,8 +128,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_add_validator(&mut self, stake_public_key: PublicKey) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
-        if !self.is_authorized_management() {
-            return Err(BaseError::UnauthorizedManagement);
+        if !self.is_authorized_management_only_by_manager() {
+            return Err(BaseError::UnauthorizedManagementOnlyByManager);
         }
 
         let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
@@ -152,8 +152,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_remove_validator(&mut self, stake_public_key: PublicKey) -> Result<Promise, BaseError> {
-        if !self.is_authorized_management() {
-            return Err(BaseError::UnauthorizedManagement);
+        if !self.is_authorized_management_only_by_manager() {
+            return Err(BaseError::UnauthorizedManagementOnlyByManager);
         }
 
         self.validating_node.unregister_validator_account(&stake_public_key)?;
@@ -165,8 +165,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_distribute_available_for_staking_balance(&mut self) -> Result<Promise, BaseError> {
-        if !self.is_authorized_management() {
-            return Err(BaseError::UnauthorizedManagement);
+        if !self.is_authorized_management_only_by_manager() {
+            return Err(BaseError::UnauthorizedManagementOnlyByManager);
         }
 
         let available_for_staking_balance = self.management_fund.get_available_for_staking_balance();
@@ -193,8 +193,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_rewards_fee(&mut self, rewards_fee: Option<Fee>) -> Result<(), BaseError> {
-        if !self.is_authorized_management() {
-            return Err(BaseError::UnauthorizedManagement);
+        if !self.is_authorized_management_only_by_manager() {
+            return Err(BaseError::UnauthorizedManagementOnlyByManager);
         }
 
         if let Some(ref rewards_fee_) = rewards_fee {
@@ -236,11 +236,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
+    fn is_authorized_management_only_by_manager(&self) -> bool {
+        self.manager_id == env::predecessor_account_id()
+    }
+
     fn is_authorized_management(&self) -> bool {
         let predecessor_account_id = env::predecessor_account_id();
 
-        self.manager_id == predecessor_account_id 
-            || self.owner_id == predecessor_account_id
+        self.owner_id == predecessor_account_id || self.manager_id == predecessor_account_id
     }
 
     fn is_epoch_synchronized(&self) -> bool {

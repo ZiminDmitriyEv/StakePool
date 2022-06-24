@@ -7,6 +7,7 @@ use std::fmt::Formatter;
 pub enum BaseError {        // TODO описать Контектс там, где он нцжен для понимания информации.
     Logic,
     ContractStateAlreadyInitialized,
+    UnauthorizedManagementOnlyByManager,
     UnauthorizedManagement,
     CalculationOwerflow,
     ZeroIncreasing,
@@ -39,8 +40,11 @@ impl Display for BaseError {
             &Self::ContractStateAlreadyInitialized => {
                 formatter.write_str("The contract state has already been initialized.")?;
             }
-            &Self::UnauthorizedManagement => {
+            &Self::UnauthorizedManagementOnlyByManager => {
                 formatter.write_str("This action is managed by only the pool manager.")?;
+            }
+            &Self::UnauthorizedManagement => {
+                formatter.write_str("This action is managed by the pool owner or pool manager.")?;
             }
             &Self::CalculationOwerflow => {
                 formatter.write_str("Calculation owerflow.")?;
