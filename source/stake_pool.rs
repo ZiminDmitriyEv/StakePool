@@ -22,7 +22,7 @@ pub struct StakePool {
     manager_id: AccountId,
     fungible_token: FungibleToken,
     management_fund: ManagementFund,
-    fee_registry: FeeRegistry,
+    fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
     validating_node: ValidatingNode,
     current_epoch_height: EpochHeight,                              // TODO обновлять при Апдейте
     total_rewards_from_validators_yocto_near_amount: Balance,       // TODO обновлять при Апдейте
@@ -32,14 +32,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_new(
         manager_id: Option<AccountId>, rewards_fee: Option<Fee>, validators_maximum_quantity: Option<u64>
     ) -> Result<Self, BaseError> {
-        if env::state_exists() {
-            return Err(BaseError::ContractStateAlreadyInitialized);
-        }
+        Self::assert_state_not_initialized()?;
 
         if let Some(ref rewards_fee_) = rewards_fee {
-            if !rewards_fee_.is_valid() {
-                return Err(BaseError::InvalidFee);
-            };
+            rewards_fee_.assert_valid()?;
         }
 
         let manager_id_ = match manager_id {
@@ -66,9 +62,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_deposit(&mut self) -> Result<(), BaseError> {
-        if !self.is_epoch_synchronized() {
-            return Err(BaseError::DesynchronizedEpoch);
-        }
+        self.assert_epoch_is_synchronized()?;
 
         let account_id = env::predecessor_account_id();
 
@@ -98,9 +92,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_instant_withdraw(&mut self, yocto_token_amount: u128) -> Result<Promise, BaseError> {
-        if !self.is_epoch_synchronized() {
-            return Err(BaseError::DesynchronizedEpoch);
-        }
+        self.assert_epoch_is_synchronized()?;
 
         let account_id = env::predecessor_account_id();
 
@@ -128,9 +120,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_add_validator(&mut self, stake_public_key: PublicKey) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
-        if !self.is_authorized_management_only_by_manager() {
-            return Err(BaseError::UnauthorizedManagementOnlyByManager);
-        }
+        self.assert_authorized_management_only_by_manager()?;
 
         let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
@@ -152,9 +142,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_remove_validator(&mut self, stake_public_key: PublicKey) -> Result<Promise, BaseError> {
-        if !self.is_authorized_management_only_by_manager() {
-            return Err(BaseError::UnauthorizedManagementOnlyByManager);
-        }
+        self.assert_authorized_management_only_by_manager()?;
 
         self.validating_node.unregister_validator_account(&stake_public_key)?;
 
@@ -165,9 +153,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_distribute_available_for_staking_balance(&mut self) -> Result<Promise, BaseError> {
-        if !self.is_authorized_management_only_by_manager() {
-            return Err(BaseError::UnauthorizedManagementOnlyByManager);
-        }
+        self.assert_authorized_management_only_by_manager()?;
 
         let available_for_staking_balance = self.management_fund.get_available_for_staking_balance();
         if available_for_staking_balance == 0 {
@@ -183,9 +169,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_manager(&mut self, manager_id: AccountId) -> Result<(), BaseError> {
-        if !self.is_authorized_management() {
-            return Err(BaseError::UnauthorizedManagement);
-        }
+        self.assert_authorized_management()?;
 
         self.manager_id = manager_id;
 
@@ -193,14 +177,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_rewards_fee(&mut self, rewards_fee: Option<Fee>) -> Result<(), BaseError> {
-        if !self.is_authorized_management_only_by_manager() {
-            return Err(BaseError::UnauthorizedManagementOnlyByManager);
-        }
+        self.assert_authorized_management_only_by_manager()?;
 
         if let Some(ref rewards_fee_) = rewards_fee {
-            if !rewards_fee_.is_valid() {
-                return Err(BaseError::InvalidFee);
-            };
+            rewards_fee_.assert_valid()?;
         }
 
         self.fee_registry.change_rewards_fee(rewards_fee);
@@ -236,18 +216,38 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn is_authorized_management_only_by_manager(&self) -> bool {
-        self.manager_id == env::predecessor_account_id()
+    fn assert_authorized_management_only_by_manager(&self) -> Result<(), BaseError> {
+        if self.manager_id != env::predecessor_account_id() {
+            return Err(BaseError::UnauthorizedManagementOnlyByManager);
+        }
+
+        Ok(())
     }
 
-    fn is_authorized_management(&self) -> bool {
+    fn assert_authorized_management(&self) -> Result<(), BaseError> {
         let predecessor_account_id = env::predecessor_account_id();
 
-        self.owner_id == predecessor_account_id || self.manager_id == predecessor_account_id
+        if self.owner_id == predecessor_account_id || self.manager_id == predecessor_account_id {
+            return Ok(());
+        }
+
+        Err(BaseError::UnauthorizedManagement)
     }
 
-    fn is_epoch_synchronized(&self) -> bool {
-        self.current_epoch_height == env::epoch_height()
+    fn assert_epoch_is_synchronized(&self) -> Result<(), BaseError> {
+        if self.current_epoch_height != env::epoch_height() {
+            return Err(BaseError::DesynchronizedEpoch);
+        }
+
+        Ok(())
+    }
+
+    fn assert_state_not_initialized() -> Result<(), BaseError> {
+        if env::state_exists() {
+            return Err(BaseError::ContractStateAlreadyInitialized);
+        }
+
+        Ok(())
     }
 }
 
@@ -392,8 +392,6 @@ impl StakePool {
 }
 
 // TODO проставить проверку по типу amount>0.
-// TODO При увеличении объема данных, кладется ли на это Неары автоматически
-
 
 // TODO Понять работу с аккаунтами. КОму пренадлжат, кто может мзенять состояние, и подобные вещи
 
