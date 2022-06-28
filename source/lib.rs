@@ -9,3 +9,4 @@ pub mod stake_pool;
 pub mod storage_key;
 pub mod validating_node;
 pub mod validator_info;
+pub mod xcc_staking_pool;

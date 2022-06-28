@@ -1,5 +1,5 @@
 use core::convert::Into;
-use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PublicKey};
+use near_sdk::{env, near_bindgen, ext_contract, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PublicKey};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
