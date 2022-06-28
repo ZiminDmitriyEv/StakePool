@@ -32,7 +32,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_new(
         manager_id: Option<AccountId>, rewards_fee: Option<Fee>, validators_maximum_quantity: Option<u64>
     ) -> Result<Self, BaseError> {
-        Self::assert_state_not_initialized()?;
+        if env::state_exists() {
+            return Err(BaseError::ContractStateAlreadyInitialized);
+        }
 
         if let Some(ref rewards_fee_) = rewards_fee {
             rewards_fee_.assert_valid()?;
@@ -237,14 +239,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn assert_epoch_is_synchronized(&self) -> Result<(), BaseError> {
         if self.current_epoch_height != env::epoch_height() {
             return Err(BaseError::DesynchronizedEpoch);
-        }
-
-        Ok(())
-    }
-
-    fn assert_state_not_initialized() -> Result<(), BaseError> {
-        if env::state_exists() {
-            return Err(BaseError::ContractStateAlreadyInitialized);
         }
 
         Ok(())
