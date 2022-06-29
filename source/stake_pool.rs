@@ -1,5 +1,5 @@
 use core::convert::Into;
-use near_sdk::{env, near_bindgen, ext_contract, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PublicKey};
+use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
@@ -16,7 +16,7 @@ construct_uint! {
 }
 
 #[near_bindgen]
-#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных.
+#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 pub struct StakePool {
     owner_id: AccountId,
     manager_id: AccountId,
@@ -121,14 +121,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_add_validator(&mut self, stake_public_key: PublicKey) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+    fn internal_add_validator(&mut self, account_id: AccountId) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         self.assert_authorized_management_only_by_manager()?;
 
         let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
-        self.validating_node.register_validator_account(&stake_public_key)?;
+        self.validating_node.register_validator_account(&account_id)?;
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
@@ -143,10 +143,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(None)
     }
 
-    fn internal_remove_validator(&mut self, stake_public_key: PublicKey) -> Result<Promise, BaseError> {
+    fn internal_remove_validator(&mut self, account_id: AccountId) -> Result<Promise, BaseError> {
         self.assert_authorized_management_only_by_manager()?;
 
-        self.validating_node.unregister_validator_account(&stake_public_key)?;
+        self.validating_node.unregister_validator_account(&account_id)?;
 
         Ok(
             Promise::new(env::predecessor_account_id())
@@ -282,8 +282,8 @@ impl StakePool {
     }
 
     #[payable]
-    pub fn add_validator(&mut self, stake_public_key: PublicKey) -> Option<Promise> {       // TODO проверить вот это.
-        match self.internal_add_validator(stake_public_key) {
+    pub fn add_validator(&mut self, account_id: AccountId) -> Option<Promise> {  // TODO убрать Оптион<Промиз>     // TODO проверть, что это аккаунт валидатора. как?
+        match self.internal_add_validator(account_id) {
             Ok(maybe_promise) => {
                 maybe_promise
             }
@@ -293,8 +293,8 @@ impl StakePool {
         }
     }
 
-    pub fn remove_validator(&mut self, stake_public_key: PublicKey) -> Promise {
-        match self.internal_remove_validator(stake_public_key) {
+    pub fn remove_validator(&mut self, account_id: AccountId) -> Promise {
+        match self.internal_remove_validator(account_id) {
             Ok(promise) => {
                 promise
             }

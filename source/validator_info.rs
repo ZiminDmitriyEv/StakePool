@@ -1,16 +1,20 @@
 use near_sdk::Balance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use super::base_error::BaseError;
+use near_sdk::{env, EpochHeight};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatorInfo {
-    staked_balance: Balance,
+    staked_balance: Balance,            // TODO добавить ContractVersion ВСе контракты разные. ??????????
+    epoch_height_for_last_update: EpochHeight
+    // TODO stake shares
 }
 
 impl ValidatorInfo {
     pub fn new() -> Self {
         Self {
-            staked_balance: 0       // Todo как узнать, сколько денег на каждом валидаотер
+            staked_balance: 0,       // Todo как узнать, сколько денег на каждом валидаотер
+            epoch_height_for_last_update: env::epoch_height()
         }
     }
 

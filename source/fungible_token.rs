@@ -41,10 +41,10 @@ impl FungibleToken {                                        // TODO стоит �
             Self { 
                 owner_id,
                 total_supply: 0,
-                token_account_registry: Self::initialize_token_account_registry_lookup_map(),
+                token_account_registry: Self::initialize_token_account_registry(),
                 token_accounts_quantity: 0,
                 storage_usage_per_token_account: Self::calculate_storage_usage_per_additional_token_account()?,
-                token_metadata: Self::initialize_fungible_token_metadata_lazy_option(&fungible_token_metadata)
+                token_metadata: Self::initialize_fungible_token_metadata(&fungible_token_metadata)
             }
         )
     }
@@ -188,7 +188,7 @@ impl FungibleToken {                                        // TODO стоит �
     }
 
     fn calculate_storage_usage_per_additional_token_account() -> Result<StorageUsage, BaseError> {
-        let mut token_account_registry = Self::initialize_token_account_registry_lookup_map();
+        let mut token_account_registry = Self::initialize_token_account_registry();
 
         let initial_storage_usage = env::storage_usage();
 
@@ -203,11 +203,11 @@ impl FungibleToken {                                        // TODO стоит �
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn initialize_token_account_registry_lookup_map() -> LookupMap<AccountId, Balance> {
+    fn initialize_token_account_registry() -> LookupMap<AccountId, Balance> {
         LookupMap::new(StorageKey::FungibleToken1)
     }
 
-    fn initialize_fungible_token_metadata_lazy_option(fungible_token_metadata: &FungibleTokenMetadata) -> LazyOption<FungibleTokenMetadata> {
+    fn initialize_fungible_token_metadata(fungible_token_metadata: &FungibleTokenMetadata) -> LazyOption<FungibleTokenMetadata> {
         LazyOption::new(StorageKey::FungibleTokenMetadata1, Some(fungible_token_metadata))
     }
 }
