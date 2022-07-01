@@ -9,6 +9,7 @@ use super::fee::Fee;
 use super::fungible_token::FungibleToken;
 use super::management_fund::ManagementFund;
 use super::validating_node::ValidatingNode;
+use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 use uint::construct_uint;
 
 construct_uint! {
@@ -121,14 +122,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_add_validator(&mut self, account_id: AccountId) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+    fn internal_add_validator(
+        &mut self, account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion
+    ) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         self.assert_authorized_management_only_by_manager()?;
 
         let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
-        self.validating_node.register_validator_account(&account_id)?;
+        self.validating_node.register_validator_account(&account_id, validator_staking_contract_version)?;
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
@@ -282,8 +285,10 @@ impl StakePool {
     }
 
     #[payable]
-    pub fn add_validator(&mut self, account_id: AccountId) -> Option<Promise> {  // TODO убрать Оптион<Промиз>     // TODO проверть, что это аккаунт валидатора. как?
-        match self.internal_add_validator(account_id) {
+    pub fn add_validator(
+        &mut self, account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion
+    ) -> Option<Promise> {  // TODO убрать Оптион<Промиз>     // TODO проверть, что это аккаунт валидатора. как?
+        match self.internal_add_validator(account_id, validator_staking_contract_version) {
             Ok(maybe_promise) => {
                 maybe_promise
             }

@@ -204,10 +204,10 @@ impl FungibleToken {                                        // TODO стоит �
     }
 
     fn initialize_token_account_registry() -> LookupMap<AccountId, Balance> {
-        LookupMap::new(StorageKey::FungibleToken1)
+        LookupMap::new(StorageKey::FungibleToken)
     }
 
     fn initialize_fungible_token_metadata(fungible_token_metadata: &FungibleTokenMetadata) -> LazyOption<FungibleTokenMetadata> {
-        LazyOption::new(StorageKey::FungibleTokenMetadata1, Some(fungible_token_metadata))
+        LazyOption::new(StorageKey::FungibleTokenMetadata, Some(fungible_token_metadata))
     }
 }
