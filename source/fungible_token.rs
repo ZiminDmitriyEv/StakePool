@@ -11,7 +11,7 @@ pub struct FungibleToken {
     total_supply: Balance,
     token_account_registry: LookupMap<AccountId, Balance>,
     token_accounts_quantity: u64,
-    /// In bytes
+    /// In bytes.
     storage_usage_per_token_account: StorageUsage,
     token_metadata: LazyOption<FungibleTokenMetadata>,
 }

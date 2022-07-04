@@ -4,6 +4,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
 use super::base_error::BaseError;
+use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
@@ -123,7 +124,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_add_validator(
-        &mut self, account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion
+        &mut self, account_id: AccountId,
+        validator_staking_contract_version: ValidatorStakingContractVersion,
+        delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
     ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         self.assert_authorized_management_only_by_manager()?;
 
@@ -131,7 +134,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
-        self.validating_node.register_validator_account(&account_id, validator_staking_contract_version)?;
+        self.validating_node.register_validator_account(&account_id, validator_staking_contract_version, delayed_unstake_validator_group)?;
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
@@ -281,12 +284,32 @@ impl StakePool {
     }
 
     #[payable]
-    pub fn add_validator(
-        &mut self, account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion
-    ) {  // TODO убрать Оптион<Промиз>     // TODO проверть, что это аккаунт валидатора. как?
-        if let Err(error) = self.internal_add_validator(account_id, validator_staking_contract_version) {
+    pub fn add_validator_for_group(
+        &mut self,
+        account_id: AccountId,
+        validator_staking_contract_version: ValidatorStakingContractVersion,
+        delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
+    ) {
+        if let Err(error) = self.internal_add_validator(
+            account_id, validator_staking_contract_version, delayed_unstake_validator_group
+        ) {
             env::panic_str(format!("{}", error).as_str());
         }
+    }
+
+    #[payable]
+    pub fn add_validator(
+        &mut self,
+        account_id: AccountId,
+        validator_staking_contract_version: ValidatorStakingContractVersion
+    ) {
+        // TODO Стратегия добавления . Меньше валидаторов, или меньше стека self.internal_get_group_candidate
+        todo!()
+        // if let Err(error) = self.internal_add_validator(
+        //     account_id, validator_staking_contract_version, delayed_unstake_validator_group
+        // ) {
+        //     env::panic_str(format!("{}", error).as_str());
+        // }
     }
 
     pub fn remove_validator(&mut self, account_id: AccountId) -> Promise {
