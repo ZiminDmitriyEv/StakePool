@@ -3,8 +3,10 @@ use near_sdk::json_types::U128;
 
 #[ext_contract(ext_staking_pool)]
 pub trait ExtStakingPool {
+    // #[payable]
     fn deposit(&mut self);
 
+    // #[payable]
     fn deposit_and_stake(&mut self);
 
     fn withdraw(&mut self, amount: U128);
