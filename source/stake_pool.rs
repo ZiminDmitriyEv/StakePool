@@ -436,3 +436,6 @@ impl StakePool {
 // Multisig key
 // Container deploying
 // Mint authority checking
+
+
+// TODO пройтись по именам полей. Валидатор - это стекинг, а не сам валидаьор, например
