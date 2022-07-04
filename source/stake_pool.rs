@@ -124,7 +124,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_add_validator(
         &mut self, account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion
-    ) -> Result<Option<Promise>, BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+    ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         self.assert_authorized_management_only_by_manager()?;
 
         let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
@@ -135,15 +135,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
-            return Ok(
-                Some(
-                    Promise::new(env::predecessor_account_id())
-                        .transfer(yocto_near_amount)
-                )
-            );
+            Promise::new(env::predecessor_account_id())
+                .transfer(yocto_near_amount);   // TODO написать в коллбеке ретурн отсюда
         }
 
-        Ok(None)
+        Ok(())
     }
 
     fn internal_remove_validator(&mut self, account_id: AccountId) -> Result<Promise, BaseError> {
@@ -287,14 +283,9 @@ impl StakePool {
     #[payable]
     pub fn add_validator(
         &mut self, account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion
-    ) -> Option<Promise> {  // TODO убрать Оптион<Промиз>     // TODO проверть, что это аккаунт валидатора. как?
-        match self.internal_add_validator(account_id, validator_staking_contract_version) {
-            Ok(maybe_promise) => {
-                maybe_promise
-            }
-            Err(error) => {
-                env::panic_str(format!("{}", error).as_str());
-            }
+    ) {  // TODO убрать Оптион<Промиз>     // TODO проверть, что это аккаунт валидатора. как?
+        if let Err(error) = self.internal_add_validator(account_id, validator_staking_contract_version) {
+            env::panic_str(format!("{}", error).as_str());
         }
     }
 
@@ -389,6 +380,8 @@ impl StakePool {
         )
     }
 }
+
+// TODO  Добавить к системным Промисам Коллбэк (логирование или подобное)
 
 // TODO проставить проверку по типу amount>0.
 
