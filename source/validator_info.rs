@@ -7,9 +7,10 @@ use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatorInfo {
     delayed_unstake_validator_group: DelayedUnstakeValidatorGroup,
-    staked_balance: Balance,            // TODO добавить ContractVersion ВСе контракты разные. ??????????
+    staking_contract_version: ValidatorStakingContractVersion,
+    staked_balance: Balance,
     last_update_epoch_height: EpochHeight,
-    staking_contract_version: ValidatorStakingContractVersion
+    last_stake_increasing_epoch_height: Option<EpochHeight>
 }
 
 impl ValidatorInfo {
@@ -18,17 +19,18 @@ impl ValidatorInfo {
     ) -> Self {
         Self {
             delayed_unstake_validator_group,
-            staked_balance: 0,       // Todo как узнать, сколько денег на каждом валидаотер
+            staking_contract_version: validator_staking_contract_version,
+            staked_balance: 0,
             last_update_epoch_height: env::epoch_height(),
-            staking_contract_version: validator_staking_contract_version
+            last_stake_increasing_epoch_height: None
         }
     }
 
     pub fn increase_staked_balance(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
         self.staked_balance = match self.staked_balance
             .checked_add(yocto_near_amount) {
-            Some(staked_balance_) => {
-                staked_balance_
+            Some(staked_balance) => {
+                staked_balance
             }
             None => {
                 return Err(BaseError::CalculationOwerflow);
@@ -36,5 +38,17 @@ impl ValidatorInfo {
         };
 
         Ok(())
+    }
+
+    pub fn set_last_stake_increasing_epoch_height(&mut self, last_stake_increasing_epoch_height: EpochHeight) {
+        self.last_stake_increasing_epoch_height = Some(last_stake_increasing_epoch_height);
+    }
+
+    pub fn get_staking_contract_version(&self) -> &ValidatorStakingContractVersion {
+        &self.staking_contract_version
+    }
+
+    pub fn get_last_update_epoch_haight(&self) -> EpochHeight {
+        self.last_update_epoch_height
     }
 }

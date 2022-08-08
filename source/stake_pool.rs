@@ -1,5 +1,5 @@
 use core::convert::Into;
-use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise};
+use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
@@ -128,6 +128,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_staking_contract_version: ValidatorStakingContractVersion,
         delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
     ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+        self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
         let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
@@ -146,6 +147,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_remove_validator(&mut self, account_id: AccountId) -> Result<Promise, BaseError> {
+        self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
         self.validating_node.unregister_validator_account(&account_id)?;
@@ -156,23 +158,34 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_distribute_available_for_staking_balance(&mut self) -> Result<Promise, BaseError> {
+    fn internal_increase_validator_stake(
+        &mut self, validator_account_id: AccountId, yocto_near_amount: Balance
+    ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
         let available_for_staking_balance = self.management_fund.get_available_for_staking_balance();
-        if available_for_staking_balance == 0 {
-            return Err(BaseError::ZeroAvailableForStakingBalanceDistribution)
+        if available_for_staking_balance == 0 || !(1..=available_for_staking_balance).contains(&yocto_near_amount) {
+            return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
-        let promise = self.validating_node.distribute_available_for_staking_balance(available_for_staking_balance)?;
+        self.validating_node.increase_validator_stake(&validator_account_id, yocto_near_amount)
+    }
 
-        self.management_fund.decrease_available_for_staking_balance(available_for_staking_balance)?;
-        self.management_fund.increase_staked_balance(available_for_staking_balance)?;
+    fn internal_update_validator_info(
+        &mut self, validator_account_id: AccountId
+    ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        self.assert_authorized_management_only_by_manager()?;
 
-        Ok(promise)
+        self.validating_node.update_validator_info(&validator_account_id)
+
+
+
+
     }
 
     fn internal_change_manager(&mut self, manager_id: AccountId) -> Result<(), BaseError> {
+        self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management()?;
 
         self.manager_id = manager_id;
@@ -181,6 +194,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_rewards_fee(&mut self, rewards_fee: Option<Fee>) -> Result<(), BaseError> {
+        self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
         if let Some(ref rewards_fee_) = rewards_fee {
@@ -192,15 +206,88 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
+    fn internal_is_account_registered(&self, account_id: AccountId) -> bool {
+        self.fungible_token.is_token_account_registered(&account_id)
+    }
+
+    fn internal_get_total_token_supply(&self) -> Result<Balance, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        Ok(self.fungible_token.get_total_token_supply())
+    }
+
+    fn internal_get_stakers_quantity(&self) -> u64 {
+        self.fungible_token.get_token_accounts_quantity()
+    }
+
+    fn internal_get_storage_staking_price_per_additional_token_account(&self) -> Result<Balance, BaseError> {
+        self.fungible_token.get_storage_staking_price_per_additional_token_account()
+    }
+
+    fn internal_get_yocto_token_amount_from_yocto_near_amount(&self, yocto_near_amount: Balance) -> Result<Balance, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        self.convert_yocto_near_amount_to_yocto_token_amount(yocto_near_amount)
+    }
+
+    fn internal_get_yocto_near_amount_from_yocto_token_amount(&self, yocto_token_amount: Balance) -> Result<Balance, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)
+    }
+
+    fn internal_get_token_account_balance(&self, account_id: AccountId) -> Result<Balance, BaseError> {
+        self.fungible_token.get_token_account_balance(&account_id)
+    }
+
+    fn internal_get_available_for_staking_balance(&self) -> Result<Balance, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        Ok(self.management_fund.get_available_for_staking_balance())
+    }
+
+    fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        Ok(self.management_fund.get_staked_balance())
+    }
+
+    fn internal_get_management_fund_amount(&self) -> Result<Balance, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        Ok(self.management_fund.get_management_fund_amount()?)
+    }
+
+    fn internal_get_fee_registry(&self) -> Result<FeeRegistry, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        Ok(self.fee_registry.clone())
+    }
+
+    fn internal_get_aggregated_information(&self) -> Result<AggregatedInformation, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        Ok(
+            AggregatedInformation::new(
+                self.management_fund.get_available_for_staking_balance().into(),
+                self.management_fund.get_staked_balance().into(),
+                self.fungible_token.get_total_token_supply().into(),
+                self.fungible_token.get_token_accounts_quantity(),
+                self.total_rewards_from_validators_yocto_near_amount.into(),
+                self.fee_registry.get_rewards_fee().clone()
+            )
+        )
+    }
+
     fn convert_yocto_near_amount_to_yocto_token_amount(&self, yocto_near_amount: Balance) -> Result<Balance, BaseError> {
         if self.management_fund.get_management_fund_amount()? == 0 {
             return Ok(yocto_near_amount);
         }
 
-        Ok(                  // TODO Проверить Округление 
+        Ok(                  // TODO Проверить Округление
             (
                 U256::from(yocto_near_amount)
-                * U256::from(self.fungible_token.get_total_token_supply()) 
+                * U256::from(self.fungible_token.get_total_token_supply())
                 / U256::from(self.management_fund.get_management_fund_amount()?)
             ).as_u128()
         )
@@ -211,11 +298,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Ok(yocto_token_amount);
         }
 
-        Ok(         // TODO Проверить Округление 
+        Ok(         // TODO Проверить Округление
             (
                 U256::from(yocto_token_amount)
                 * U256::from(self.management_fund.get_management_fund_amount()?)
-                / U256::from(self.fungible_token.get_total_token_supply()) 
+                / U256::from(self.fungible_token.get_total_token_supply())
             ).as_u128()
         )
     }
@@ -266,7 +353,7 @@ impl StakePool {
     /// Stake process.
     #[payable]
     pub fn deposit(&mut self) {
-        if let Err(error) = self.internal_deposit() {
+        if let Err(error) = self.internal_deposit() {               // TODO TODO ЕСЛИ при distribute_available_for_staking_balance уже распределено, то здесь сразу распределеям на случайный валидатор из текущей группы
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -283,8 +370,22 @@ impl StakePool {
         }
     }
 
+    /// Delayed unstake process.
+    pub fn delayed_withdraw(&mut self, yocto_token_amount: U128) -> Promise {
+        // match self.internal_delayed_withdraw(yocto_token_amount.into()) {
+        //     Ok(promise) => {
+        //         promise
+        //     }
+        //     Err(error) => {
+        //         env::panic_str(format!("{}", error).as_str());
+        //     }
+        // }
+
+        todo!();
+    }
+
     #[payable]
-    pub fn add_validator_for_group(
+    pub fn add_validator(
         &mut self,
         account_id: AccountId,
         validator_staking_contract_version: ValidatorStakingContractVersion,
@@ -295,21 +396,6 @@ impl StakePool {
         ) {
             env::panic_str(format!("{}", error).as_str());
         }
-    }
-
-    #[payable]
-    pub fn add_validator(
-        &mut self,
-        account_id: AccountId,
-        validator_staking_contract_version: ValidatorStakingContractVersion
-    ) {
-        // TODO Стратегия добавления . Меньше валидаторов, или меньше стека self.internal_get_group_candidate
-        todo!()
-        // if let Err(error) = self.internal_add_validator(
-        //     account_id, validator_staking_contract_version, delayed_unstake_validator_group
-        // ) {
-        //     env::panic_str(format!("{}", error).as_str());
-        // }
     }
 
     pub fn remove_validator(&mut self, account_id: AccountId) -> Promise {
@@ -323,8 +409,23 @@ impl StakePool {
         }
     }
 
-    pub fn distribute_available_for_staking_balance(&mut self) -> Promise {
-        match self.internal_distribute_available_for_staking_balance() {
+    pub fn increase_validator_stake(
+        &mut self, validator_account_id: AccountId, yocto_near_amount: Balance
+    ) -> Promise {
+        match self.internal_increase_validator_stake(validator_account_id, yocto_near_amount) {
+            Ok(promise) => {
+                promise
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
+    }
+
+    pub fn update_validator_info(
+        &mut self, validator_account_id: AccountId
+    ) -> Promise {
+        match self.internal_update_validator_info(validator_account_id) {
             Ok(promise) => {
                 promise
             }
@@ -346,22 +447,62 @@ impl StakePool {
         }
     }
 
-    pub fn is_account_registered(&self, account_id: &AccountId) -> bool {
-        self.fungible_token.is_token_account_registered(account_id)
+    pub fn is_account_registered(&self, account_id: AccountId) -> bool {
+        self.internal_is_account_registered(account_id)
     }
 
     pub fn get_total_token_supply(&self) -> U128 {
-        self.fungible_token.get_total_token_supply().into()
+        match self.internal_get_total_token_supply() {
+            Ok(total_token_supply) => {
+                total_token_supply.into()
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
     pub fn get_stakers_quantity(&self) -> u64 {
-        self.fungible_token.get_token_accounts_quantity()
+        self.internal_get_stakers_quantity()
+    }
+
+    pub fn get_storage_staking_price_per_additional_token_account(&self) -> U128 {
+        match self.internal_get_storage_staking_price_per_additional_token_account() {
+            Ok(storage_staking_price) => {
+                storage_staking_price.into()
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
+    }
+
+    pub fn get_yocto_token_amount_from_yocto_near_amount(&self, yocto_near_amount: U128) -> U128 {
+        match self.internal_get_yocto_token_amount_from_yocto_near_amount(yocto_near_amount.into()) {
+            Ok(yocto_token_amount) => {
+                yocto_token_amount.into()
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
+    }
+
+    pub fn get_yocto_near_amount_from_yocto_token_amount(&self, yocto_token_amount: U128) -> U128 {
+        match self.internal_get_yocto_near_amount_from_yocto_token_amount(yocto_token_amount.into()) {
+            Ok(yocto_near_amount) => {
+                yocto_near_amount.into()
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
     pub fn get_token_account_balance(&self, account_id: AccountId) -> U128 {
-        match self.fungible_token.get_token_account_balance(&account_id) {
-            Ok(balance) => {
-                balance.into()
+        match self.internal_get_token_account_balance(account_id) {
+            Ok(token_account_balance) => {
+                token_account_balance.into()
             }
             Err(error) => {
                 env::panic_str(format!("{}", error).as_str());
@@ -370,15 +511,29 @@ impl StakePool {
     }
 
     pub fn get_available_for_staking_balance(&self) -> U128 {
-        self.management_fund.get_available_for_staking_balance().into()
+        match self.internal_get_available_for_staking_balance() {
+            Ok(available_for_staking_balance) => {
+                available_for_staking_balance.into()
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
     pub fn get_staked_balance(&self) -> U128 {
-        self.management_fund.get_staked_balance().into()
+        match self.internal_get_staked_balance() {
+            Ok(staked_balance) => {
+                staked_balance.into()
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
     pub fn get_management_fund_amount(&self) -> U128 {
-        match self.management_fund.get_management_fund_amount() {
+        match self.internal_get_management_fund_amount() {
             Ok(management_fund_amount) => {
                 management_fund_amount.into()
             }
@@ -389,18 +544,71 @@ impl StakePool {
     }
 
     pub fn get_fee_registry(&self) -> FeeRegistry {
-        self.fee_registry.clone()
+        match self.internal_get_fee_registry() {
+            Ok(fee_registry) => {
+                fee_registry
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
-    pub fn get_aggregated_information(&self) -> AggregatedInformation {
-        AggregatedInformation::new(
-            self.management_fund.get_available_for_staking_balance().into(),
-            self.management_fund.get_staked_balance().into(),
-            self.fungible_token.get_total_token_supply().into(),
-            self.fungible_token.get_token_accounts_quantity(),
-            self.total_rewards_from_validators_yocto_near_amount.into(),
-            self.fee_registry.get_rewards_fee().clone()
-        )
+    pub fn get_aggregated_information(&self) -> AggregatedInformation { // TODO есть Info , есть Information
+        match self.internal_get_aggregated_information() {
+            Ok(aggregated_information) => {
+                aggregated_information
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
+    }
+
+    #[private]
+    pub fn increase_validator_stake_callback(
+        &mut self, validator_account_id: &AccountId, staked_yocto_near_amount: Balance, current_epoch_height: EpochHeight
+    ) -> bool {
+        if env::promise_results_count() == 0 {
+            env::log_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => {
+                self.management_fund.decrease_available_for_staking_balance(staked_yocto_near_amount).unwrap();     // TODO unwrap, может, перейти на set get
+                self.management_fund.increase_staked_balance(staked_yocto_near_amount).unwrap();    // TODO unwrap
+                self.validating_node.update_after_increase_validator_stake(
+                    validator_account_id, staked_yocto_near_amount, current_epoch_height
+                ).unwrap();    // TODO unwrap
+
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+
+    #[private]
+    pub fn update_validator_info_callback(
+        &mut self, validator_account_id: &AccountId, current_epoch_height: EpochHeight
+    ) -> bool {
+        if env::promise_results_count() == 0 {
+            env::log_str("Contract expected a result on the callback.");
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(data) => {
+                let balance: u128 = near_sdk::serde_json::from_slice::<U128>(data.as_slice()).unwrap().into();          // TODO Что делать с Анврепом
+
+
+
+                true
+            }
+            _ => {
+                false
+            }
+        }
     }
 }
 
@@ -422,8 +630,8 @@ impl StakePool {
 // static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;            Нужно ли вот это ??????????????????
 
 
-// Returning Promise: This allows NEAR Explorer, near-cli, near-api-js, and other tooling to correctly determine if a whole chain of transactions 
-// is successful. If your function does not return Promise, tools like near-cli will return immediately after your function call. 
+// Returning Promise: This allows NEAR Explorer, near-cli, near-api-js, and other tooling to correctly determine if a whole chain of transactions
+// is successful. If your function does not return Promise, tools like near-cli will return immediately after your function call.
 // And then even if the transfer fails, your function call will be considered successful. You can see a before & after example of this behavior here.
 
 
@@ -439,3 +647,9 @@ impl StakePool {
 
 
 // TODO пройтись по именам полей. Валидатор - это стекинг, а не сам валидаьор, например
+
+// TODO CLIPPY
+// TODO ПАоменять стиль матчинга
+
+// TODO NOTE: stake pool Guarantees are based on the no-slashing condition. Once slashing is introduced, the contract will no longer
+// provide some guarantees. Read more about slashing in [Nightshade paper](https://near.ai/nightshade).

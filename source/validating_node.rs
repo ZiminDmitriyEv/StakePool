@@ -1,11 +1,15 @@
-use near_sdk::{env, Balance, PublicKey, StorageUsage, Promise, AccountId};
-use crate::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
+use crate::ONE_TERA;
+use near_sdk::{env, near_bindgen, Balance, PublicKey, StorageUsage, Promise, AccountId, PromiseResult, Gas, EpochHeight};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap};
 use super::base_error::BaseError;
+use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
+use super::stake_pool::StakePool;
+use super::stake_pool::StakePoolExt;
 use super::storage_key::StorageKey;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
+use super::xcc_staking_pool::ext_staking_pool;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
@@ -16,9 +20,12 @@ pub struct ValidatingNode {
     validator_accounts_maximum_quantity: Option<u64>,
     /// In bytes.
     storage_usage_per_validator_account: StorageUsage,
+    is_stake_distributed_in_current_epoch: bool
 }
 
 impl ValidatingNode {
+    /// In fact it is needed 10 Tgas, but this is with a margin of safety.
+    const DEPOSIT_AND_STAKE_TGAS: u64 = 15;
     const MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;        // TODO такое же уже есть. Вынести все в один файл для констант?
 
     pub fn new(validators_maximum_quantity: Option<u64>) -> Result<Self, BaseError> {
@@ -28,7 +35,8 @@ impl ValidatingNode {
                 validator_account_registry: Self::initialize_validator_account_registry(),
                 validator_accounts_quantity: 0,
                 validator_accounts_maximum_quantity: validators_maximum_quantity,
-                storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?
+                storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?,
+                is_stake_distributed_in_current_epoch: false
             }
         )
     }
@@ -68,34 +76,87 @@ impl ValidatingNode {
         Ok(())
     }
 
-    pub fn distribute_available_for_staking_balance(&mut self, yocto_near_amount: Balance) -> Result<Promise, BaseError> {
+    pub fn increase_validator_stake(    // TODO Пока это делает на итерациях с клиента, могут сделать депозит или снять наоборот
+        &mut self, validator_account_id: &AccountId, yocto_near_amount: Balance
+    ) -> Result<Promise, BaseError> {     // TODO какое минимально значение для дистрибуции.? Нужно ли регестрировать аккаунт на стороне стэкеинг-пуул?
         if self.validator_accounts_quantity == 0 {
             return Err(BaseError::ValidatorAccountsZeroQuantity)
         }
-// TODO TODO Вот здесь нуно распределить все без остатка
-// Поставить проверки, чтоюы никуда не зашел ноль !!!!!!!!!!!!!!!!!!!!!!!
-        let yocto_near_amount_for_one_validator = yocto_near_amount / (self.validator_accounts_quantity as u128);
 
-        let mut validator_account_registry: Vec<(PublicKey, ValidatorInfo)> = vec![];
+        // let deposit_and_stake_gas = Gas(ONE_TERA * Self::DEPOSIT_AND_STAKE_TGAS);           // TODO проверка, сколько газа прикрепили
 
+        match self.validator_account_registry.get(validator_account_id) {
+            Some(validator_info) => {
+                match *validator_info.get_staking_contract_version() {
+                    ValidatorStakingContractVersion::Classic => {
+                        return Ok(
+                            ext_staking_pool::ext(validator_account_id.clone())
+                                .with_attached_deposit(yocto_near_amount)
+                                // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                .deposit_and_stake()
+                                .then(
+                                    StakePool::ext(env::current_account_id())           // TODO TODO TODO TODO  смотреть, сколько на коллбек Газа.
+                                        .increase_validator_stake_callback(
+                                            &validator_account_id, yocto_near_amount, env::epoch_height()
+                                        )
+                                )
+                            );
+                    }
+                }
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
+    }
 
+    pub fn update_after_increase_validator_stake(                         // TODO  Как здесь назвать или что сделать, есть много подобных названий
+        &mut self, validator_account_id: &AccountId, staked_balance: Balance, current_epoch_height: EpochHeight
+    ) -> Result<(), BaseError> {
+        match self.validator_account_registry.get(validator_account_id) {
+            Some(mut validator_info) => {
+                validator_info.increase_staked_balance(staked_balance)?;
+                validator_info.set_last_stake_increasing_epoch_height(current_epoch_height);
 
-        todo!();
-        // for (account_id, mut validator_info) in self.validator_account_registry.iter() {
+                self.validator_account_registry.insert(validator_account_id, &validator_info);
 
-        //     validator_info.increase_staked_balance(yocto_near_amount_for_one_validator)?;
+                Ok(())
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
+    }
 
-        //     validator_account_registry.push((account_id, validator_info));
-        // }
-        
-        // match promise {
-        //     Some(promise_) => {
-        //         Ok(promise_)
-        //     }
-        //     None => {
-        //         return Err(BaseError::Logic);
-        //     }
-        // }
+    pub fn update_validator_info(  // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
+        &mut self, validator_account_id: &AccountId
+    ) -> Result<Promise, BaseError> {
+        match self.validator_account_registry.get(validator_account_id) {
+            Some(validator_info) => {
+                let current_epoch_haight = env::epoch_height();
+
+                if validator_info.get_last_update_epoch_haight() < current_epoch_haight {
+                    match *validator_info.get_staking_contract_version() {
+                        ValidatorStakingContractVersion::Classic => {
+                            return Ok(
+                                ext_staking_pool::ext(validator_account_id.clone())
+                                    // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                    .get_account_total_balance(env::current_account_id())
+                                    .then(
+                                        StakePool::ext(env::current_account_id())           // TODO TODO TODO TODO  смотреть, сколько на коллбек Газа.
+                                            .update_validator_info_callback(&validator_account_id, current_epoch_haight)
+                                    )
+                                );
+                        }
+                    }
+                }
+
+                return Err(BaseError::ValidatorInfoAlreadyUpdated);
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
     }
 
     pub fn get_storage_staking_price_per_additional_validator_account(&self) -> Result<Balance, BaseError> {
@@ -112,11 +173,11 @@ impl ValidatingNode {
 
     fn calculate_storage_usage_per_additional_validator_account() -> Result<StorageUsage, BaseError> {
         let mut validator_account_registry = Self::initialize_validator_account_registry();
-    
+
         let initial_storage_usage = env::storage_usage();
-    
+
         let account_id = AccountId::new_unchecked("a".repeat(Self::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
-    
+
         validator_account_registry.insert(
             &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic, DelayedUnstakeValidatorGroup::First)
         );
@@ -124,7 +185,7 @@ impl ValidatingNode {
         if env::storage_usage() < initial_storage_usage {
             return Err(BaseError::Logic);
         }
-    
+
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
