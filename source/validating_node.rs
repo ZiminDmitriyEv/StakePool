@@ -111,24 +111,6 @@ impl ValidatingNode {
         }
     }
 
-    pub fn update_after_increase_validator_stake(                         // TODO  Как здесь назвать или что сделать, есть много подобных названий
-        &mut self, validator_account_id: &AccountId, staked_balance: Balance, current_epoch_height: EpochHeight
-    ) -> Result<(), BaseError> {
-        match self.validator_account_registry.get(validator_account_id) {
-            Some(mut validator_info) => {
-                validator_info.increase_staked_balance(staked_balance)?;
-                validator_info.set_last_stake_increasing_epoch_height(current_epoch_height);
-
-                self.validator_account_registry.insert(validator_account_id, &validator_info);
-
-                Ok(())
-            }
-            None => {
-                return Err(BaseError::ValidatorAccountIsNotRegistered);
-            }
-        }
-    }
-
     pub fn update_validator_info(  // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
         &mut self, validator_account_id: &AccountId
     ) -> Result<Promise, BaseError> {
@@ -211,9 +193,13 @@ impl StakePool {
                 management_fund.decrease_available_for_staking_balance(staked_yocto_near_amount).unwrap();     // TODO unwrap, может, перейти на set get
                 management_fund.increase_staked_balance(staked_yocto_near_amount).unwrap();    // TODO unwrap
 
-                self.get_validating_node().update_after_increase_validator_stake(
-                    validator_account_id, staked_yocto_near_amount, current_epoch_height
-                ).unwrap();    // TODO unwrap
+                let validating_node = self.get_validating_node();
+
+                let mut validator_info = validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap
+                validator_info.increase_staked_balance(staked_yocto_near_amount).unwrap();       // TODO unwrap
+                validator_info.set_last_stake_increasing_epoch_height(current_epoch_height);
+
+                validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
 
                 true
             }
