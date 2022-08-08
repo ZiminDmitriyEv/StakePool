@@ -332,6 +332,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Ok(())
     }
+
+    pub fn get_management_fund(&mut self) -> &mut ManagementFund {
+        &mut self.management_fund
+    }
+
+    pub fn get_validating_node(&mut self) -> &mut ValidatingNode {
+        &mut self.validating_node
+    }
 }
 
 #[near_bindgen]
@@ -561,52 +569,6 @@ impl StakePool {
             }
             Err(error) => {
                 env::panic_str(format!("{}", error).as_str());
-            }
-        }
-    }
-
-    #[private]
-    pub fn increase_validator_stake_callback(
-        &mut self, validator_account_id: &AccountId, staked_yocto_near_amount: Balance, current_epoch_height: EpochHeight
-    ) -> bool {
-        if env::promise_results_count() == 0 {
-            env::log_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
-        }
-
-        match env::promise_result(0) {
-            PromiseResult::Successful(_) => {
-                self.management_fund.decrease_available_for_staking_balance(staked_yocto_near_amount).unwrap();     // TODO unwrap, может, перейти на set get
-                self.management_fund.increase_staked_balance(staked_yocto_near_amount).unwrap();    // TODO unwrap
-                self.validating_node.update_after_increase_validator_stake(
-                    validator_account_id, staked_yocto_near_amount, current_epoch_height
-                ).unwrap();    // TODO unwrap
-
-                true
-            }
-            _ => {
-                false
-            }
-        }
-    }
-
-    #[private]
-    pub fn update_validator_info_callback(
-        &mut self, validator_account_id: &AccountId, current_epoch_height: EpochHeight
-    ) -> bool {
-        if env::promise_results_count() == 0 {
-            env::log_str("Contract expected a result on the callback.");
-        }
-
-        match env::promise_result(0) {
-            PromiseResult::Successful(data) => {
-                let balance: u128 = near_sdk::serde_json::from_slice::<U128>(data.as_slice()).unwrap().into();          // TODO Что делать с Анврепом
-
-
-
-                true
-            }
-            _ => {
-                false
             }
         }
     }

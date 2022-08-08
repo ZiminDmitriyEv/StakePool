@@ -4,6 +4,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap};
 use super::base_error::BaseError;
 use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
+use near_sdk::json_types::U128;
 use super::stake_pool::StakePool;
 use super::stake_pool::StakePoolExt;
 use super::storage_key::StorageKey;
@@ -191,5 +192,56 @@ impl ValidatingNode {
 
     fn initialize_validator_account_registry() -> UnorderedMap<AccountId, ValidatorInfo> {
         UnorderedMap::new(StorageKey::ValidatorAccountRegistry)
+    }
+}
+
+#[near_bindgen]
+impl StakePool {
+    #[private]
+    pub fn increase_validator_stake_callback(
+        &mut self, validator_account_id: &AccountId, staked_yocto_near_amount: Balance, current_epoch_height: EpochHeight
+    ) -> bool {
+        if env::promise_results_count() == 0 {
+            env::log_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => {
+                let management_fund = self.get_management_fund();
+                management_fund.decrease_available_for_staking_balance(staked_yocto_near_amount).unwrap();     // TODO unwrap, может, перейти на set get
+                management_fund.increase_staked_balance(staked_yocto_near_amount).unwrap();    // TODO unwrap
+
+                self.get_validating_node().update_after_increase_validator_stake(
+                    validator_account_id, staked_yocto_near_amount, current_epoch_height
+                ).unwrap();    // TODO unwrap
+
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+
+    #[private]
+    pub fn update_validator_info_callback(
+        &mut self, validator_account_id: &AccountId, current_epoch_height: EpochHeight
+    ) -> bool {
+        if env::promise_results_count() == 0 {
+            env::log_str("Contract expected a result on the callback.");
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(data) => {
+                let balance: u128 = near_sdk::serde_json::from_slice::<U128>(data.as_slice()).unwrap().into();          // TODO Что делать с Анврепом
+
+
+
+                true
+            }
+            _ => {
+                false
+            }
+        }
     }
 }
