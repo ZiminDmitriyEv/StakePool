@@ -26,8 +26,9 @@ pub struct StakePool {
     management_fund: ManagementFund,
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
     validating_node: ValidatingNode,
-    current_epoch_height: EpochHeight,                              // TODO обновлять при Апдейте
-    total_rewards_from_validators_yocto_near_amount: Balance,       // TODO обновлять при Апдейте
+    current_epoch_height: EpochHeight,
+    previous_epoch_rewards_from_validators_yocto_near_amount: Balance,       // TODO МОЖет, сделать через ПрошлыйКурс?
+    total_rewards_from_validators_yocto_near_amount: Balance        // TODO Все, что связано с ревардс, перенести в структуру?
 }
 
 impl StakePool {        // TODO TODO TODO добавить логи к каждой манипуляции с деньгами или event. Интерфейсы
@@ -60,6 +61,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 management_fund: ManagementFund::new(),
                 validating_node: ValidatingNode::new(validators_maximum_quantity)?,
                 current_epoch_height: env::epoch_height(),
+                previous_epoch_rewards_from_validators_yocto_near_amount: 0,
                 total_rewards_from_validators_yocto_near_amount: 0
             }
         )
@@ -124,7 +126,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_add_validator(
-        &mut self, account_id: AccountId,
+        &mut self,
+        validator_account_id: AccountId,
         validator_staking_contract_version: ValidatorStakingContractVersion,
         delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
     ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
@@ -135,7 +138,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
-        self.validating_node.register_validator_account(&account_id, validator_staking_contract_version, delayed_unstake_validator_group)?;
+        self.validating_node.register_validator_account(&validator_account_id, validator_staking_contract_version, delayed_unstake_validator_group)?;
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
@@ -146,11 +149,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    fn internal_remove_validator(&mut self, account_id: AccountId) -> Result<Promise, BaseError> {
+    fn internal_remove_validator(&mut self, validator_account_id: AccountId) -> Result<Promise, BaseError> {
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        self.validating_node.unregister_validator_account(&account_id)?;
+        self.validating_node.unregister_validator_account(&validator_account_id)?;
 
         Ok(
             Promise::new(env::predecessor_account_id())
@@ -172,16 +175,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating_node.increase_validator_stake(&validator_account_id, yocto_near_amount)
     }
 
-    fn internal_update_validator_info(
+    fn internal_update_validator_info(      // TODO TODO TODO Что делать, если в новой эпохе часть обновилась, и уже еще раз наступила новая эпоха, и теперь то, что осталось, обновились. То есть, рассинхронизация состояния.
         &mut self, validator_account_id: AccountId
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        self.assert_epoch_is_desynchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
         self.validating_node.update_validator_info(&validator_account_id)
-
-
-
-
     }
 
     fn internal_change_manager(&mut self, manager_id: AccountId) -> Result<(), BaseError> {
@@ -333,6 +333,42 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
+    fn assert_epoch_is_desynchronized(&self) -> Result<(), BaseError> {
+        if self.current_epoch_height == env::epoch_height() {
+            return Err(BaseError::SynchronizedEpoch);
+        }
+
+        Ok(())
+    }
+
+    pub fn increase_total_rewards_from_validators_yocto_near_amount(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
+        self.total_rewards_from_validators_yocto_near_amount = match self.total_rewards_from_validators_yocto_near_amount
+            .checked_add(yocto_near_amount) {
+            Some(total_rewards_from_validators_yocto_near_amount_) => {
+                total_rewards_from_validators_yocto_near_amount_
+            }
+            None => {
+                return Err(BaseError::CalculationOwerflow);
+            }
+        };
+
+        Ok(())
+    }
+
+    pub fn increase_previous_epoch_rewards_from_validators_yocto_near_amount(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
+        self.previous_epoch_rewards_from_validators_yocto_near_amount = match self.previous_epoch_rewards_from_validators_yocto_near_amount
+            .checked_add(yocto_near_amount) {
+            Some(previous_epoch_rewards_from_validators_yocto_near_amount_) => {
+                previous_epoch_rewards_from_validators_yocto_near_amount_
+            }
+            None => {
+                return Err(BaseError::CalculationOwerflow);
+            }
+        };
+
+        Ok(())
+    }
+
     pub fn get_management_fund(&mut self) -> &mut ManagementFund {
         &mut self.management_fund
     }
@@ -395,19 +431,19 @@ impl StakePool {
     #[payable]
     pub fn add_validator(
         &mut self,
-        account_id: AccountId,
+        validator_account_id: AccountId,
         validator_staking_contract_version: ValidatorStakingContractVersion,
         delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
     ) {
         if let Err(error) = self.internal_add_validator(
-            account_id, validator_staking_contract_version, delayed_unstake_validator_group
+            validator_account_id, validator_staking_contract_version, delayed_unstake_validator_group
         ) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
 
-    pub fn remove_validator(&mut self, account_id: AccountId) -> Promise {
-        match self.internal_remove_validator(account_id) {
+    pub fn remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
+        match self.internal_remove_validator(validator_account_id) {
             Ok(promise) => {
                 promise
             }

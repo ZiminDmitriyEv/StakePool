@@ -21,7 +21,7 @@ pub struct ValidatingNode {
     validator_accounts_maximum_quantity: Option<u64>,
     /// In bytes.
     storage_usage_per_validator_account: StorageUsage,
-    is_stake_distributed_in_current_epoch: bool
+    quantity_of_validators_accounts_updated_in_current_epoch: u64
 }
 
 impl ValidatingNode {
@@ -37,13 +37,14 @@ impl ValidatingNode {
                 validator_accounts_quantity: 0,
                 validator_accounts_maximum_quantity: validators_maximum_quantity,
                 storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?,
-                is_stake_distributed_in_current_epoch: false
+                quantity_of_validators_accounts_updated_in_current_epoch: 0
             }
         )
     }
 
     pub fn register_validator_account(
-        &mut self, account_id: &AccountId,
+        &mut self,
+        validator_account_id: &AccountId,
         staking_contract_version: ValidatorStakingContractVersion,
         delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
     ) -> Result<(), BaseError> {
@@ -54,17 +55,20 @@ impl ValidatingNode {
         }
 
         if let Some(_) = self.validator_account_registry.insert(
-            account_id, &ValidatorInfo::new(staking_contract_version, delayed_unstake_validator_group)
+            validator_account_id, &ValidatorInfo::new(staking_contract_version, delayed_unstake_validator_group)
         ) {
             return Err(BaseError::ValidatorAccountIsAlreadyRegistered);
         }
-        self.validator_accounts_quantity = self.validator_accounts_quantity + 1;
+        self.validator_accounts_quantity += 1;
+        self.quantity_of_validators_accounts_updated_in_current_epoch += 1;
 
         Ok(())
     }
 
-    pub fn unregister_validator_account(&mut self, account_id: &AccountId) -> Result<(), BaseError> {
-        if let None = self.validator_account_registry.remove(account_id) {
+    pub fn unregister_validator_account(
+        &mut self, validator_account_id: &AccountId
+    ) -> Result<(), BaseError> {
+        if let None = self.validator_account_registry.remove(validator_account_id) {
             return Err(BaseError::ValidatorAccountIsNotRegistered);
         }
         if self.validator_accounts_quantity == 0 {
@@ -72,7 +76,8 @@ impl ValidatingNode {
         }
 
     // TODO проверить, есть ли на валидаторе деньги. если нет, то можно
-        self.validator_accounts_quantity = self.validator_accounts_quantity - 1;
+        self.validator_accounts_quantity -= 1;
+        self.quantity_of_validators_accounts_updated_in_current_epoch -= 1;
 
         Ok(())
     }
@@ -118,7 +123,7 @@ impl ValidatingNode {
             Some(validator_info) => {
                 let current_epoch_haight = env::epoch_height();
 
-                if validator_info.get_last_update_epoch_haight() < current_epoch_haight {
+                if validator_info.get_last_update_info_epoch_haight() < current_epoch_haight {
                     match *validator_info.get_staking_contract_version() {
                         ValidatorStakingContractVersion::Classic => {
                             return Ok(
@@ -181,10 +186,13 @@ impl ValidatingNode {
 impl StakePool {
     #[private]
     pub fn increase_validator_stake_callback(
-        &mut self, validator_account_id: &AccountId, staked_yocto_near_amount: Balance, current_epoch_height: EpochHeight
+        &mut self,
+        validator_account_id: &AccountId,
+        staked_yocto_near_amount: Balance,
+        current_epoch_height: EpochHeight
     ) -> bool {
         if env::promise_results_count() == 0 {
-            env::log_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
+            env::panic_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
         }
 
         match env::promise_result(0) {
@@ -195,7 +203,7 @@ impl StakePool {
 
                 let validating_node = self.get_validating_node();
 
-                let mut validator_info = validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap
+                let mut validator_info = validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
                 validator_info.increase_staked_balance(staked_yocto_near_amount).unwrap();       // TODO unwrap
                 validator_info.set_last_stake_increasing_epoch_height(current_epoch_height);
 
@@ -211,17 +219,39 @@ impl StakePool {
 
     #[private]
     pub fn update_validator_info_callback(
-        &mut self, validator_account_id: &AccountId, current_epoch_height: EpochHeight
+        &mut self,
+        validator_account_id: &AccountId,
+        current_epoch_height: EpochHeight
     ) -> bool {
         if env::promise_results_count() == 0 {
-            env::log_str("Contract expected a result on the callback.");
+            env::panic_str("Contract expected a result on the callback.");
         }
 
         match env::promise_result(0) {
             PromiseResult::Successful(data) => {
-                let balance: u128 = near_sdk::serde_json::from_slice::<U128>(data.as_slice()).unwrap().into();          // TODO Что делать с Анврепом
+                let new_staked_balance: u128 = near_sdk::serde_json::from_slice::<U128>(data.as_slice()).unwrap().into();          // TODO Что делать с Анврепом
 
+                let validating_node = self.get_validating_node();
 
+                let mut validator_info = validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap
+
+                let current_staked_balance = validator_info.get_staked_balance();
+
+                let staking_rewards_yocto_near_amount = if new_staked_balance >= current_staked_balance {
+                    new_staked_balance - current_staked_balance
+                } else {
+                    env::panic_str("Contract logic error.");        // TODO  как обоработать. Может, возвращать структуры ?
+                };
+
+                validator_info.set_last_update_info_epoch_height(current_epoch_height);
+                validator_info.set_staked_balance(new_staked_balance);
+
+                validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
+                validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;
+
+                self.get_management_fund().increase_staked_balance(staking_rewards_yocto_near_amount).unwrap();
+                self.increase_previous_epoch_rewards_from_validators_yocto_near_amount(staking_rewards_yocto_near_amount).unwrap();
+                self.increase_total_rewards_from_validators_yocto_near_amount(staking_rewards_yocto_near_amount).unwrap();
 
                 true
             }

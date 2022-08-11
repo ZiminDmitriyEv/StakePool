@@ -9,7 +9,7 @@ pub struct ValidatorInfo {
     delayed_unstake_validator_group: DelayedUnstakeValidatorGroup,
     staking_contract_version: ValidatorStakingContractVersion,
     staked_balance: Balance,
-    last_update_epoch_height: EpochHeight,
+    last_update_info_epoch_height: EpochHeight,
     last_stake_increasing_epoch_height: Option<EpochHeight>
 }
 
@@ -21,7 +21,7 @@ impl ValidatorInfo {
             delayed_unstake_validator_group,
             staking_contract_version: validator_staking_contract_version,
             staked_balance: 0,
-            last_update_epoch_height: env::epoch_height(),
+            last_update_info_epoch_height: env::epoch_height(),
             last_stake_increasing_epoch_height: None
         }
     }
@@ -40,6 +40,14 @@ impl ValidatorInfo {
         Ok(())
     }
 
+    pub fn set_staked_balance(&mut self, yocto_near_amount: Balance) {
+        self.staked_balance = yocto_near_amount;
+    }
+
+    pub fn set_last_update_info_epoch_height(&mut self, last_update_info_epoch_height: EpochHeight) {
+        self.last_update_info_epoch_height = last_update_info_epoch_height;
+    }
+
     pub fn set_last_stake_increasing_epoch_height(&mut self, last_stake_increasing_epoch_height: EpochHeight) {
         self.last_stake_increasing_epoch_height = Some(last_stake_increasing_epoch_height);
     }
@@ -48,7 +56,11 @@ impl ValidatorInfo {
         &self.staking_contract_version
     }
 
-    pub fn get_last_update_epoch_haight(&self) -> EpochHeight {
-        self.last_update_epoch_height
+    pub fn get_staked_balance(&self) -> Balance {
+        self.staked_balance
+    }
+
+    pub fn get_last_update_info_epoch_haight(&self) -> EpochHeight {
+        self.last_update_info_epoch_height
     }
 }

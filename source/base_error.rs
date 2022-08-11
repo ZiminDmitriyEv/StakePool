@@ -13,6 +13,7 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     ZeroIncreasing,
     ZeroDecreasing,
     InvalidFee,
+    SynchronizedEpoch,
     DesynchronizedEpoch,
     InvalidFungibleTokenMetadata,
     TokenAccountAlreadyRegistered,
@@ -58,6 +59,9 @@ impl Display for BaseError {
             }
             Self::InvalidFee => {
                 formatter.write_str("Invalid fee.")?;
+            }
+            Self::SynchronizedEpoch => {
+                formatter.write_str("The epoch is synchronized.")?;
             }
             Self::DesynchronizedEpoch => {
                 formatter.write_str("The epoch is desynchronized.")?;
