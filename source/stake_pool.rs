@@ -63,6 +63,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         };
 
+        // TODO rewards_receiver_account_id != everstake_rewards_receiver_account_id
+
         // TODO Взять деньги (зарезервировать) для регистрации этих двуз аккаунтов lido_rewards_receiver_account_id,
                 // everstake_rewards_receiver_account_id,
                 // !!!!!!!!!!!!!!
