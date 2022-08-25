@@ -79,7 +79,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 fungible_token: FungibleToken::new(env::predecessor_account_id())?,
                 management_fund: ManagementFund::new(),
                 validating_node: ValidatingNode::new(validators_maximum_quantity)?,
-                current_epoch_height: env::epoch_height() - 1,
+                current_epoch_height: env::epoch_height(),
                 previous_epoch_rewards_from_validators_yocto_near_amount: 0,
                 total_rewards_from_validators_yocto_near_amount: 0
             }
