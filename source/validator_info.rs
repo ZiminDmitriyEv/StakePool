@@ -22,7 +22,7 @@ impl ValidatorInfo {
             delayed_unstake_validator_group,
             staking_contract_version: validator_staking_contract_version,
             staked_balance: 0,
-            last_update_info_epoch_height: env::epoch_height(),
+            last_update_info_epoch_height: env::epoch_height() - 1,
             last_stake_increasing_epoch_height: None
         }
     }

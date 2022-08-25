@@ -247,12 +247,13 @@ impl StakePool {
         }
     }
 
+    // TODO комментарий написать. Возвращаем и сохраняем епохи в разном состоянии по-разному, чтобы запомнить, что в какой эпохе инициировано по фактту, а в какую выполнен коллбек
     #[private]
     pub fn update_validator_info_callback(
         &mut self,
         validator_account_id: &AccountId,
         current_epoch_height: EpochHeight
-    ) -> bool {
+    ) -> (bool, EpochHeight) {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -282,10 +283,10 @@ impl StakePool {
                 self.get_management_fund().increase_staked_balance(staking_rewards_yocto_near_amount).unwrap();
                 self.increase_previous_epoch_rewards_from_validators_yocto_near_amount(staking_rewards_yocto_near_amount).unwrap();
 
-                true
+                (true, env::epoch_height())
             }
             _ => {
-                false
+                (false, env::epoch_height())
             }
         }
     }
