@@ -9,6 +9,7 @@ pub(crate) mod management_fund;
 pub mod stake_pool;
 pub(crate) mod storage_key;
 pub(crate) mod validating_node;
+pub(crate) mod validator_info_dto;
 pub(crate) mod validator_info;
 pub(crate) mod validator_staking_contract_version;
 pub(crate) mod xcc_staking_pool;

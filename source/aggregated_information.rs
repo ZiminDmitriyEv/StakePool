@@ -1,11 +1,10 @@
-use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
 use super::fee::Fee;
 
-#[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct AggregatedInformation {
+pub struct AggregatedInformation {                                         // TODO ВСе ДТО ВЫНЕСТИ В модуль.
     /// YoctoNear amount required for distribution on validators.
     available_for_staking_balance: U128,
 

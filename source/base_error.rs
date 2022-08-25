@@ -28,7 +28,8 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     ValidatorAccountsMaximumQuantityExceeding,
     ValidatorAccountsZeroQuantity,
     InsufficientAvailableForStakingBalance,
-    ValidatorInfoAlreadyUpdated
+    ValidatorInfoAlreadyUpdated,
+    SomeValidatorInfoDoesNotUpdated
 }
 
 impl Error for BaseError {}
@@ -107,6 +108,9 @@ impl Display for BaseError {
             }
             Self::ValidatorInfoAlreadyUpdated => {
                 formatter.write_str("Validator info already updated.")?;
+            }
+            Self::SomeValidatorInfoDoesNotUpdated => {
+                formatter.write_str("The information about some validators does not updated.")?;
             }
         }
 

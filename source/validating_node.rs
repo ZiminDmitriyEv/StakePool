@@ -2,12 +2,13 @@ use crate::ONE_TERA;
 use near_sdk::{env, near_bindgen, Balance, PublicKey, StorageUsage, Promise, AccountId, PromiseResult, Gas, EpochHeight};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap};
+use near_sdk::json_types::U128;
 use super::base_error::BaseError;
 use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
-use near_sdk::json_types::U128;
 use super::stake_pool::StakePool;
 use super::stake_pool::StakePoolExt;
 use super::storage_key::StorageKey;
+use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 use super::xcc_staking_pool::ext_staking_pool;
@@ -19,9 +20,9 @@ pub struct ValidatingNode {
     validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
     validator_accounts_quantity: u64,
     validator_accounts_maximum_quantity: Option<u64>,
+    quantity_of_validators_accounts_updated_in_current_epoch: u64,
     /// In bytes.
     storage_usage_per_validator_account: StorageUsage,
-    quantity_of_validators_accounts_updated_in_current_epoch: u64
 }
 
 impl ValidatingNode {
@@ -36,8 +37,8 @@ impl ValidatingNode {
                 validator_account_registry: Self::initialize_validator_account_registry(),
                 validator_accounts_quantity: 0,
                 validator_accounts_maximum_quantity: validators_maximum_quantity,
-                storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?,
-                quantity_of_validators_accounts_updated_in_current_epoch: 0
+                quantity_of_validators_accounts_updated_in_current_epoch: 0,
+                storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?
             }
         )
     }
@@ -82,7 +83,7 @@ impl ValidatingNode {
         Ok(())
     }
 
-    pub fn increase_validator_stake(    // TODO Пока это делает на итерациях с клиента, могут сделать депозит или снять наоборот
+    pub fn increase_validator_stake(    // TODO Пока это делает на итерациях с клиента, могут сделать депозит или снять наоборот. Определиться, как работает клиет. Ситуация, когда идет распределение в процессе, и кто-то кладт стейк или выводит
         &mut self, validator_account_id: &AccountId, yocto_near_amount: Balance
     ) -> Result<Promise, BaseError> {     // TODO какое минимально значение для дистрибуции.? Нужно ли регестрировать аккаунт на стороне стэкеинг-пуул?
         if self.validator_accounts_quantity == 0 {
@@ -145,6 +146,35 @@ impl ValidatingNode {
                 return Err(BaseError::ValidatorAccountIsNotRegistered);
             }
         }
+    }
+
+    pub fn is_all_validators_updated_in_current_epoch(&self) -> bool {
+        self.quantity_of_validators_accounts_updated_in_current_epoch == self.validator_accounts_quantity
+    }
+
+    pub fn update(&mut self) {
+        self.current_delayed_unstake_validator_group.set_next();
+        self.quantity_of_validators_accounts_updated_in_current_epoch = 0;
+    }
+
+    pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> {
+        let mut validator_info_dto_registry: Vec<ValidatorInfoDto> = vec![];
+
+        for (account_id, validator_info) in self.validator_account_registry.into_iter() {
+            let (
+                _delayed_unstake_validator_group,
+                _staking_contract_version,
+                staked_balance,
+                last_update_info_epoch_height,
+                last_stake_increasing_epoch_height
+            ) = validator_info.into_inner();
+
+            validator_info_dto_registry.push(
+                ValidatorInfoDto::new(account_id, staked_balance, last_update_info_epoch_height, last_stake_increasing_epoch_height)
+            );
+        }
+
+        validator_info_dto_registry
     }
 
     pub fn get_storage_staking_price_per_additional_validator_account(&self) -> Result<Balance, BaseError> {
@@ -251,7 +281,6 @@ impl StakePool {
 
                 self.get_management_fund().increase_staked_balance(staking_rewards_yocto_near_amount).unwrap();
                 self.increase_previous_epoch_rewards_from_validators_yocto_near_amount(staking_rewards_yocto_near_amount).unwrap();
-                self.increase_total_rewards_from_validators_yocto_near_amount(staking_rewards_yocto_near_amount).unwrap();
 
                 true
             }

@@ -10,6 +10,7 @@ use super::fee::Fee;
 use super::fungible_token::FungibleToken;
 use super::management_fund::ManagementFund;
 use super::validating_node::ValidatingNode;
+use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 use uint::construct_uint;
 
@@ -22,6 +23,8 @@ construct_uint! {
 pub struct StakePool {
     owner_id: AccountId,
     manager_id: AccountId,
+    rewards_receiver_account_id: AccountId,
+    everstake_rewards_receiver_account_id: AccountId,
     fungible_token: FungibleToken,
     management_fund: ManagementFund,
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
@@ -33,7 +36,12 @@ pub struct StakePool {
 
 impl StakePool {        // TODO TODO TODO добавить логи к каждой манипуляции с деньгами или event. Интерфейсы
     fn internal_new(
-        manager_id: Option<AccountId>, rewards_fee: Option<Fee>, validators_maximum_quantity: Option<u64>
+        manager_id: Option<AccountId>,
+        rewards_receiver_account_id: AccountId,
+        everstake_rewards_receiver_account_id: AccountId,
+        rewards_fee: Option<Fee>,
+        everstake_rewards_fee: Option<Fee>,
+        validators_maximum_quantity: Option<u64>
     ) -> Result<Self, BaseError> {
         if env::state_exists() {
             return Err(BaseError::ContractStateAlreadyInitialized);
@@ -41,6 +49,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         if let Some(ref rewards_fee_) = rewards_fee {
             rewards_fee_.assert_valid()?;
+        }
+        if let Some(ref everstake_rewards_fee_) = everstake_rewards_fee {
+            everstake_rewards_fee_.assert_valid()?;
         }
 
         let manager_id_ = match manager_id {
@@ -52,11 +63,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         };
 
+        // TODO Взять деньги (зарезервировать) для регистрации этих двуз аккаунтов lido_rewards_receiver_account_id,
+                // everstake_rewards_receiver_account_id,
+                // !!!!!!!!!!!!!!
+
         Ok(
             Self {
                 owner_id: env::predecessor_account_id(),
                 manager_id: manager_id_,
-                fee_registry: FeeRegistry::new(rewards_fee),
+                rewards_receiver_account_id,
+                everstake_rewards_receiver_account_id,
+                fee_registry: FeeRegistry::new(rewards_fee, everstake_rewards_fee),
                 fungible_token: FungibleToken::new(env::predecessor_account_id())?,
                 management_fund: ManagementFund::new(),
                 validating_node: ValidatingNode::new(validators_maximum_quantity)?,
@@ -184,6 +201,49 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating_node.update_validator_info(&validator_account_id)
     }
 
+    fn internal_update(&mut self) -> Result<(), BaseError>{
+        self.assert_epoch_is_desynchronized()?;
+        self.assert_authorized_management_only_by_manager()?;
+
+        if !self.validating_node.is_all_validators_updated_in_current_epoch() {
+            return Err(BaseError::SomeValidatorInfoDoesNotUpdated);
+        }
+
+        let previous_epoch_rewards_from_validators_yocto_token_amount = self.convert_yocto_near_amount_to_yocto_token_amount(
+            self.previous_epoch_rewards_from_validators_yocto_near_amount
+        )?;
+
+        self.management_fund.increase_staked_balance(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
+        self.validating_node.update();
+        self.current_epoch_height = env::epoch_height();
+        self.increase_total_rewards_from_validators_yocto_near_amount(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
+        self.previous_epoch_rewards_from_validators_yocto_near_amount = 0;
+
+        if let Some(rewards_fee) = self.fee_registry.get_rewards_fee() {
+            let rewards_fee_yocto_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_yocto_token_amount);
+            if rewards_fee_yocto_token_amount != 0 {
+                if !self.fungible_token.is_token_account_registered(&self.rewards_receiver_account_id) {
+                    self.fungible_token.register_token_account(&self.rewards_receiver_account_id)?;
+                }
+
+                self.fungible_token.increase_token_account_balance(&self.rewards_receiver_account_id, rewards_fee_yocto_token_amount)?;
+            }
+
+            if let Some(everstake_rewards_fee) = self.fee_registry.get_everstake_rewards_fee() {
+                let everstake_rewards_fee_yocto_token_amount = everstake_rewards_fee.multiply(rewards_fee_yocto_token_amount);
+                if everstake_rewards_fee_yocto_token_amount != 0 {
+                    if !self.fungible_token.is_token_account_registered(&self.everstake_rewards_receiver_account_id) {
+                        self.fungible_token.register_token_account(&self.everstake_rewards_receiver_account_id)?;
+                    }
+
+                    self.fungible_token.increase_token_account_balance(&self.everstake_rewards_receiver_account_id, everstake_rewards_fee_yocto_token_amount)?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     fn internal_change_manager(&mut self, manager_id: AccountId) -> Result<(), BaseError> {
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management()?;
@@ -202,6 +262,19 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fee_registry.change_rewards_fee(rewards_fee);
+
+        Ok(())
+    }
+
+    fn internal_change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) -> Result<(), BaseError> {
+        self.assert_epoch_is_synchronized()?;
+        self.assert_authorized_management_only_by_manager()?;
+
+        if let Some(ref everstake_rewards_fee_) = everstake_rewards_fee {
+            everstake_rewards_fee_.assert_valid()?;
+        }
+
+        self.fee_registry.change_everstake_rewards_fee(everstake_rewards_fee);
 
         Ok(())
     }
@@ -262,6 +335,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
 
         Ok(self.fee_registry.clone())
+    }
+
+    pub fn internal_get_current_epoch_height(&self) -> EpochHeight {
+        self.current_epoch_height
+    }
+
+    fn internal_get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> {
+        self.validating_node.get_validator_info_dto()
     }
 
     fn internal_get_aggregated_information(&self) -> Result<AggregatedInformation, BaseError> {
@@ -341,7 +422,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    pub fn increase_total_rewards_from_validators_yocto_near_amount(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
+    fn increase_total_rewards_from_validators_yocto_near_amount(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
         self.total_rewards_from_validators_yocto_near_amount = match self.total_rewards_from_validators_yocto_near_amount
             .checked_add(yocto_near_amount) {
             Some(total_rewards_from_validators_yocto_near_amount_) => {
@@ -382,9 +463,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 impl StakePool {
     #[init]
     pub fn new(
-        manager_id: Option<AccountId>, rewards_fee: Option<Fee>, validators_maximum_quantity: Option<u64>
+        manager_id: Option<AccountId>,
+        rewards_receiver_account_id: AccountId,
+        everstake_rewards_receiver_account_id: AccountId,
+        rewards_fee: Option<Fee>,
+        everstake_rewards_fee: Option<Fee>,
+        validators_maximum_quantity: Option<u64>
     ) -> Self {      // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
-        match Self::internal_new(manager_id, rewards_fee, validators_maximum_quantity) {
+        match Self::internal_new(
+            manager_id, rewards_receiver_account_id, everstake_rewards_receiver_account_id, rewards_fee, everstake_rewards_fee, validators_maximum_quantity
+        ) {
             Ok(stake_pool) => {
                 stake_pool
             }
@@ -479,6 +567,12 @@ impl StakePool {
         }
     }
 
+    pub fn update(&mut self) {
+        if let Err(error) = self.internal_update() {
+            env::panic_str(format!("{}", error).as_str());
+        }
+    }
+
     pub fn change_manager(&mut self, manager_id: AccountId) {
         if let Err(error) = self.internal_change_manager(manager_id) {
             env::panic_str(format!("{}", error).as_str());
@@ -487,6 +581,12 @@ impl StakePool {
 
     pub fn change_rewards_fee(&mut self, rewards_fee: Option<Fee>) {
         if let Err(error) = self.internal_change_rewards_fee(rewards_fee) {
+            env::panic_str(format!("{}", error).as_str());
+        }
+    }
+
+    pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
+        if let Err(error) = self.internal_change_everstake_rewards_fee(everstake_rewards_fee) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -598,7 +698,15 @@ impl StakePool {
         }
     }
 
-    pub fn get_aggregated_information(&self) -> AggregatedInformation { // TODO есть Info , есть Information
+    pub fn get_current_epoch_height(&self) -> EpochHeight {
+        self.internal_get_current_epoch_height()
+    }
+
+    pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)
+        self.internal_get_validator_info_dto()
+    }
+
+    pub fn get_aggregated_information(&self) -> AggregatedInformation { // TODO есть Info , есть Information (проблема в имени)
         match self.internal_get_aggregated_information() {
             Ok(aggregated_information) => {
                 aggregated_information

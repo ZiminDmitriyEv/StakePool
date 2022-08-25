@@ -15,7 +15,8 @@ pub struct ValidatorInfo {
 
 impl ValidatorInfo {
     pub fn new(
-        validator_staking_contract_version: ValidatorStakingContractVersion, delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
+        validator_staking_contract_version: ValidatorStakingContractVersion,
+        delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
     ) -> Self {
         Self {
             delayed_unstake_validator_group,
@@ -38,6 +39,22 @@ impl ValidatorInfo {
         };
 
         Ok(())
+    }
+
+    pub fn into_inner(self) -> (
+        DelayedUnstakeValidatorGroup,
+        ValidatorStakingContractVersion,
+        Balance,
+        EpochHeight,
+        Option<EpochHeight>
+    ) {
+        (
+            self.delayed_unstake_validator_group,
+            self.staking_contract_version,
+            self.staked_balance,
+            self.last_update_info_epoch_height,
+            self.last_stake_increasing_epoch_height
+        )
     }
 
     pub fn set_staked_balance(&mut self, yocto_near_amount: Balance) {

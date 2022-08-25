@@ -6,13 +6,15 @@ use super::fee::Fee;
 #[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct FeeRegistry {
-    rewards_fee: Option<Fee>
+    rewards_fee: Option<Fee>,
+    everstake_rewards_fee: Option<Fee>
 }
 
 impl FeeRegistry {
-    pub fn new(rewards_fee: Option<Fee>) -> Self {
+    pub fn new(rewards_fee: Option<Fee>, everstake_rewards_fee: Option<Fee>) -> Self {
         Self {
-            rewards_fee
+            rewards_fee,
+            everstake_rewards_fee
         }
     }
 
@@ -20,7 +22,15 @@ impl FeeRegistry {
         self.rewards_fee = rewards_fee;
     }
 
+    pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
+        self.everstake_rewards_fee = everstake_rewards_fee;
+    }
+
     pub fn get_rewards_fee(&self) -> &Option<Fee> {
         &self.rewards_fee
+    }
+
+    pub fn get_everstake_rewards_fee(&self) -> &Option<Fee> {
+        &self.everstake_rewards_fee
     }
 }
