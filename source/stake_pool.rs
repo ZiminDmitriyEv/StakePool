@@ -339,8 +339,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(self.fee_registry.clone())
     }
 
-    pub fn internal_get_current_epoch_height(&self) -> EpochHeight {
-        self.current_epoch_height
+    pub fn internal_get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
+        (self.current_epoch_height, env::epoch_height())
     }
 
     fn internal_get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> {
@@ -700,7 +700,7 @@ impl StakePool {
         }
     }
 
-    pub fn get_current_epoch_height(&self) -> EpochHeight {
+    pub fn get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
         self.internal_get_current_epoch_height()
     }
 
