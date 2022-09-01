@@ -1,19 +1,30 @@
-use near_sdk::Balance;
+use near_sdk::{Balance, AccountId, env, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::collections::UnorderedMap;
 use super::base_error::BaseError;
+use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
+use super::storage_key::StorageKey;
+use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ManagementFund {
     available_for_staking_balance: Balance,
-    staked_balance: Balance
+    staked_balance: Balance,
+    delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
+    /// In bytes.
+    storage_usage_per_delayed_withdrawal_account: StorageUsage,
 }
 
 impl ManagementFund {
-    pub fn new() -> Self {
-        Self {
-            available_for_staking_balance: 0,
-            staked_balance: 0
-        }
+    pub fn new() -> Result<Self, BaseError> {
+        Ok(
+            Self {
+                available_for_staking_balance: 0,
+                staked_balance: 0,
+                delayed_withdrawal_account_registry: Self::initialize_delayed_withdrawal_account_registry(),
+                storage_usage_per_delayed_withdrawal_account: Self::calculate_storage_usage_per_additional_delayed_withdrawal_account()?
+            }
+        )
     }
 
     pub fn increase_available_for_staking_balance(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
@@ -90,5 +101,27 @@ impl ManagementFund {
                 return Err(BaseError::CalculationOwerflow);
             }
         }
+    }
+
+    fn calculate_storage_usage_per_additional_delayed_withdrawal_account() -> Result<StorageUsage, BaseError> {
+        let mut delayed_withdrawal_account_registry = Self::initialize_delayed_withdrawal_account_registry();
+
+        let initial_storage_usage = env::storage_usage();
+
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+
+        delayed_withdrawal_account_registry.insert(
+            &account_id, &DelayedWithdrawalInfo::new(0, env::epoch_height())
+        );
+
+        if env::storage_usage() < initial_storage_usage {
+            return Err(BaseError::Logic);
+        }
+
+        Ok(env::storage_usage() - initial_storage_usage)
+    }
+
+    fn initialize_delayed_withdrawal_account_registry() -> UnorderedMap<AccountId, DelayedWithdrawalInfo> {
+        UnorderedMap::new(StorageKey::DelayedWithdrawalAccountRegistry)
     }
 }

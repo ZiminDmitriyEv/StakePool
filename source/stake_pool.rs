@@ -77,7 +77,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 everstake_rewards_receiver_account_id,
                 fee_registry: FeeRegistry::new(rewards_fee, everstake_rewards_fee),
                 fungible_token: FungibleToken::new(env::predecessor_account_id())?,
-                management_fund: ManagementFund::new(),
+                management_fund: ManagementFund::new()?,
                 validating_node: ValidatingNode::new(validators_maximum_quantity)?,
                 current_epoch_height: env::epoch_height(),
                 previous_epoch_rewards_from_validators_yocto_near_amount: 0,
@@ -116,7 +116,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    fn internal_instant_withdraw(&mut self, yocto_token_amount: u128) -> Result<Promise, BaseError> {
+    fn internal_instant_withdraw(&mut self, yocto_token_amount: u128) -> Result<Promise, BaseError> {   // TODO проставить процент на снятие!!
         self.assert_epoch_is_synchronized()?;
 
         let account_id = env::predecessor_account_id();
@@ -130,6 +130,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Err(BaseError::InsufficientTokenDeposit);
         }
 
+// TODO проверки, имеется ли столько у пользоватея
+
         self.fungible_token.decrease_token_account_balance(&account_id, yocto_token_amount)?;
         self.management_fund.decrease_available_for_staking_balance(yocto_near_amount)?;
         if self.fungible_token.can_unregister_token_account(&account_id)? {
@@ -142,6 +144,23 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             Promise::new(account_id)
                 .transfer(yocto_near_amount)
         )
+    }
+
+    fn internal_delayed_withdraw(&mut self, yocto_token_amount: u128) -> Result<Promise, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        let account_id = env::predecessor_account_id();
+
+        if yocto_token_amount == 0 {
+            return Err(BaseError::InsufficientTokenDeposit);
+        }
+
+        let mut yocto_near_amount = self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)?;
+        if yocto_near_amount == 0 {
+            return Err(BaseError::InsufficientTokenDeposit);
+        }
+
+        todo!();
     }
 
     fn internal_add_validator(
@@ -506,16 +525,14 @@ impl StakePool {
 
     /// Delayed unstake process.
     pub fn delayed_withdraw(&mut self, yocto_token_amount: U128) -> Promise {
-        // match self.internal_delayed_withdraw(yocto_token_amount.into()) {
-        //     Ok(promise) => {
-        //         promise
-        //     }
-        //     Err(error) => {
-        //         env::panic_str(format!("{}", error).as_str());
-        //     }
-        // }
-
-        todo!();
+        match self.internal_delayed_withdraw(yocto_token_amount.into()) {
+            Ok(promise) => {
+                promise
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
     #[payable]

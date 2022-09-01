@@ -8,4 +8,5 @@ pub enum StorageKey {                               // TODO Придумать, 
     FungibleToken,
     FungibleTokenMetadata,
     ValidatorAccountRegistry,
+    DelayedWithdrawalAccountRegistry
 }

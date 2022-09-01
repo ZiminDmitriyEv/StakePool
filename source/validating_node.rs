@@ -12,6 +12,7 @@ use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 use super::xcc_staking_pool::ext_staking_pool;
+use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
@@ -28,7 +29,6 @@ pub struct ValidatingNode {
 impl ValidatingNode {
     /// In fact it is needed 10 Tgas, but this is with a margin of safety.
     const DEPOSIT_AND_STAKE_TGAS: u64 = 15;
-    const MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;        // TODO такое же уже есть. Вынести все в один файл для констант?
 
     pub fn new(validators_maximum_quantity: Option<u64>) -> Result<Self, BaseError> {
         Ok(
@@ -194,7 +194,7 @@ impl ValidatingNode {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(Self::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         validator_account_registry.insert(
             &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic, DelayedUnstakeValidatorGroup::First)
