@@ -86,7 +86,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_deposit(&mut self) -> Result<(), BaseError> {
+    fn internal_deposit(&mut self) -> Result<(), BaseError> {       // TODO TODO TODO TODO TODO Нужно ли делать так, чтобы еслм  is_distributed_on_validators_in_current_epoch, то кладем сразу на Префферед валидатор
         self.assert_epoch_is_synchronized()?;
 
         let account_id = env::predecessor_account_id();
@@ -235,6 +235,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )?;
 
         self.management_fund.increase_staked_balance(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
+        self.management_fund.set_is_distributed_on_validators_in_current_epoch(false);
         self.validating_node.update();
         self.current_epoch_height = env::epoch_height();
         self.increase_total_rewards_from_validators_yocto_near_amount(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
@@ -379,6 +380,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 self.fee_registry.get_rewards_fee().clone()
             )
         )
+    }
+
+    fn internal_confirm_stake_distribution(&mut self) -> Result<(), BaseError> {
+        self.assert_epoch_is_synchronized()?;
+        self.assert_authorized_management_only_by_manager()?;
+
+        self.management_fund.set_is_distributed_on_validators_in_current_epoch(true);
+
+        Ok(())
     }
 
     fn convert_yocto_near_amount_to_yocto_token_amount(&self, yocto_near_amount: Balance) -> Result<Balance, BaseError> {
@@ -614,6 +624,12 @@ impl StakePool {
         self.internal_is_account_registered(account_id)
     }
 
+    pub fn confirm_stake_distribution(&mut self) {
+        if let Err(error) = self.internal_confirm_stake_distribution() {
+            env::panic_str(format!("{}", error).as_str());
+        }
+    }
+
     pub fn get_total_token_supply(&self) -> U128 {
         match self.internal_get_total_token_supply() {
             Ok(total_token_supply) => {
@@ -719,6 +735,10 @@ impl StakePool {
 
     pub fn get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
         self.internal_get_current_epoch_height()
+    }
+
+    pub fn is_stake_distributed(&self) -> bool {
+        self.management_fund.get_is_distributed_on_validators_in_current_epoch()
     }
 
     pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)

@@ -11,6 +11,7 @@ pub struct ManagementFund {
     available_for_staking_balance: Balance,
     staked_balance: Balance,
     delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
+    is_distributed_on_validators_in_current_epoch: bool,
     /// In bytes.
     storage_usage_per_delayed_withdrawal_account: StorageUsage,
 }
@@ -22,6 +23,7 @@ impl ManagementFund {
                 available_for_staking_balance: 0,
                 staked_balance: 0,
                 delayed_withdrawal_account_registry: Self::initialize_delayed_withdrawal_account_registry(),
+                is_distributed_on_validators_in_current_epoch: false,
                 storage_usage_per_delayed_withdrawal_account: Self::calculate_storage_usage_per_additional_delayed_withdrawal_account()?
             }
         )
@@ -83,12 +85,20 @@ impl ManagementFund {
         Ok(())
     }
 
+    pub fn set_is_distributed_on_validators_in_current_epoch(&mut self, is_distributed_on_validators_in_current_epoch: bool) {
+        self.is_distributed_on_validators_in_current_epoch = is_distributed_on_validators_in_current_epoch;
+    }
+
     pub fn get_available_for_staking_balance(&self) -> Balance {
         self.available_for_staking_balance
     }
 
     pub fn get_staked_balance(&self) -> Balance {
         self.staked_balance
+    }
+
+    pub fn get_is_distributed_on_validators_in_current_epoch(&self) -> bool {
+        self.is_distributed_on_validators_in_current_epoch
     }
 
     pub fn get_management_fund_amount(&self) -> Result<Balance, BaseError> {
