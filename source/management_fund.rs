@@ -121,7 +121,7 @@ impl ManagementFund {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         delayed_withdrawal_account_registry.insert(
-            &account_id, &DelayedWithdrawalInfo::new(0, env::epoch_height())
+            &account_id, &DelayedWithdrawalInfo { yocto_near_amount: 0, started_epoch_height: env::epoch_height() }
         );
 
         if env::storage_usage() < initial_storage_usage {

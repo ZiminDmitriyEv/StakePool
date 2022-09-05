@@ -75,7 +75,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 manager_id: manager_id_,
                 rewards_receiver_account_id,
                 everstake_rewards_receiver_account_id,
-                fee_registry: FeeRegistry::new(rewards_fee, everstake_rewards_fee),
+                fee_registry: FeeRegistry { rewards_fee, everstake_rewards_fee },
                 fungible_token: FungibleToken::new(env::predecessor_account_id())?,
                 management_fund: ManagementFund::new()?,
                 validating_node: ValidatingNode::new(validators_maximum_quantity)?,
@@ -255,7 +255,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.increase_total_rewards_from_validators_yocto_near_amount(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
         self.previous_epoch_rewards_from_validators_yocto_near_amount = 0;
 
-        if let Some(rewards_fee) = self.fee_registry.get_rewards_fee() {
+        if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
             let rewards_fee_yocto_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_yocto_token_amount);
             if rewards_fee_yocto_token_amount != 0 {
                 if !self.fungible_token.is_token_account_registered(&self.rewards_receiver_account_id) {
@@ -265,7 +265,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 self.fungible_token.increase_token_account_balance(&self.rewards_receiver_account_id, rewards_fee_yocto_token_amount)?;
             }
 
-            if let Some(everstake_rewards_fee) = self.fee_registry.get_everstake_rewards_fee() {
+            if let Some(ref everstake_rewards_fee) = self.fee_registry.everstake_rewards_fee {
                 let everstake_rewards_fee_yocto_token_amount = everstake_rewards_fee.multiply(rewards_fee_yocto_token_amount);
                 if everstake_rewards_fee_yocto_token_amount != 0 {
                     if !self.fungible_token.is_token_account_registered(&self.everstake_rewards_receiver_account_id) {
@@ -297,7 +297,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             rewards_fee_.assert_valid()?;
         }
 
-        self.fee_registry.change_rewards_fee(rewards_fee);
+        self.fee_registry.rewards_fee = rewards_fee;
 
         Ok(())
     }
@@ -310,7 +310,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             everstake_rewards_fee_.assert_valid()?;
         }
 
-        self.fee_registry.change_everstake_rewards_fee(everstake_rewards_fee);
+        self.fee_registry.everstake_rewards_fee = everstake_rewards_fee;
 
         Ok(())
     }
@@ -391,7 +391,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 token_total_supply: self.fungible_token.get_total_token_supply().into(),
                 token_accounts_quantity: self.fungible_token.get_token_accounts_quantity(),
                 total_rewards_from_validators_yocto_near_amount: self.total_rewards_from_validators_yocto_near_amount.into(),
-                rewards_fee: self.fee_registry.get_rewards_fee().clone()
+                rewards_fee: self.fee_registry.rewards_fee.clone()
             }
         )
     }
