@@ -385,14 +385,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
 
         Ok(
-            AggregatedInformation::new(
-                self.management_fund.get_available_for_staking_balance().into(),
-                self.management_fund.get_staked_balance().into(),
-                self.fungible_token.get_total_token_supply().into(),
-                self.fungible_token.get_token_accounts_quantity(),
-                self.total_rewards_from_validators_yocto_near_amount.into(),
-                self.fee_registry.get_rewards_fee().clone()
-            )
+            AggregatedInformation {
+                available_for_staking_balance: self.management_fund.get_available_for_staking_balance().into(),
+                staked_balance: self.management_fund.get_staked_balance().into(),
+                token_total_supply: self.fungible_token.get_total_token_supply().into(),
+                token_accounts_quantity: self.fungible_token.get_token_accounts_quantity(),
+                total_rewards_from_validators_yocto_near_amount: self.total_rewards_from_validators_yocto_near_amount.into(),
+                rewards_fee: self.fee_registry.get_rewards_fee().clone()
+            }
         )
     }
 
