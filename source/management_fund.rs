@@ -8,7 +8,7 @@ use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ManagementFund {
-    available_for_staking_balance: Balance,
+    pub available_for_staking_balance: Balance,
     staked_balance: Balance,
     delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
     is_distributed_on_validators_in_current_epoch: bool,
@@ -87,10 +87,6 @@ impl ManagementFund {
 
     pub fn set_is_distributed_on_validators_in_current_epoch(&mut self, is_distributed_on_validators_in_current_epoch: bool) {
         self.is_distributed_on_validators_in_current_epoch = is_distributed_on_validators_in_current_epoch;
-    }
-
-    pub fn get_available_for_staking_balance(&self) -> Balance {
-        self.available_for_staking_balance
     }
 
     pub fn get_staked_balance(&self) -> Balance {

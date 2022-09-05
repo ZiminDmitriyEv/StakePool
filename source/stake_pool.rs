@@ -92,7 +92,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let account_id = env::predecessor_account_id();
 
         let mut net_convertible_yocto_near_amount = env::attached_deposit();
-        if !self.fungible_token.is_token_account_registered(&account_id) {
+        if !self.fungible_token.token_account_registry.contains_key(&account_id) {
             let storage_staking_price_per_additional_token_account = self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
             if net_convertible_yocto_near_amount < storage_staking_price_per_additional_token_account {
                 return Err(BaseError::InsufficientNearDepositForStorageStaking);
@@ -129,22 +129,41 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if yocto_near_amount > self.management_fund.get_available_for_staking_balance() {
+        if yocto_near_amount > self.management_fund.available_for_staking_balance {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
-        let account_yocto_token_amount = self.fungible_token.get_token_account_balance(&account_id)?;
-        if yocto_token_amount > account_yocto_token_amount {
+        let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
+            Some(yocto_token_balance_) => yocto_token_balance_,
+            None => {
+                return Err(BaseError::TokenAccountIsNotRegistered);
+            }
+        };
+        if yocto_token_balance < yocto_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
+        yocto_token_balance -= yocto_token_amount;
 
-        self.fungible_token.decrease_token_account_balance(&account_id, yocto_token_amount)?;
-        self.management_fund.decrease_available_for_staking_balance(yocto_near_amount)?;
-        if self.fungible_token.can_unregister_token_account(&account_id)? {
-            self.fungible_token.unregister_token_account(&account_id)?;
+        self.management_fund.available_for_staking_balance -= yocto_near_amount;
 
-            yocto_near_amount = yocto_near_amount + self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
+        if yocto_token_balance > 0 {
+            self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
+        } else {
+            if let None = self.fungible_token.token_account_registry.remove(&account_id) {
+                return Err(BaseError::Logic);
+            }
+            self.fungible_token.token_accounts_quantity -= 1;
+
+            yocto_near_amount += self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
         }
+
+        self.fungible_token.total_supply = match self.fungible_token.total_supply
+            .checked_sub(yocto_token_amount) {
+            Some(total_supply_) => total_supply_,
+            None => {
+                return Err(BaseError::Logic);
+            }
+        };
 
         Ok(
             Promise::new(account_id)
@@ -165,11 +184,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if yocto_near_amount > self.management_fund.get_available_for_staking_balance() {
+        if yocto_near_amount > self.management_fund.available_for_staking_balance {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
-        let account_yocto_token_amount = self.fungible_token.get_token_account_balance(&account_id)?;
+        let account_yocto_token_amount = match self.fungible_token.token_account_registry.get(&account_id) {
+            Some(yocto_token_balance_) => yocto_token_balance_,
+            None => {
+                return Err(BaseError::TokenAccountIsNotRegistered);
+            }
+        };
+
         if yocto_token_amount > account_yocto_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
@@ -219,7 +244,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        let available_for_staking_balance = self.management_fund.get_available_for_staking_balance();
+        let available_for_staking_balance = self.management_fund.available_for_staking_balance;
         if available_for_staking_balance == 0 || !(1..=available_for_staking_balance).contains(&yocto_near_amount) {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
@@ -258,7 +283,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
             let rewards_fee_yocto_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_yocto_token_amount);
             if rewards_fee_yocto_token_amount != 0 {
-                if !self.fungible_token.is_token_account_registered(&self.rewards_receiver_account_id) {
+                if !self.fungible_token.token_account_registry.contains_key(&self.rewards_receiver_account_id) {
                     self.fungible_token.register_token_account(&self.rewards_receiver_account_id)?;
                 }
 
@@ -268,7 +293,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             if let Some(ref everstake_rewards_fee) = self.fee_registry.everstake_rewards_fee {
                 let everstake_rewards_fee_yocto_token_amount = everstake_rewards_fee.multiply(rewards_fee_yocto_token_amount);
                 if everstake_rewards_fee_yocto_token_amount != 0 {
-                    if !self.fungible_token.is_token_account_registered(&self.everstake_rewards_receiver_account_id) {
+                    if !self.fungible_token.token_account_registry.contains_key(&self.everstake_rewards_receiver_account_id) {
                         self.fungible_token.register_token_account(&self.everstake_rewards_receiver_account_id)?;
                     }
 
@@ -316,17 +341,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_is_account_registered(&self, account_id: AccountId) -> bool {
-        self.fungible_token.is_token_account_registered(&account_id)
+        self.fungible_token.token_account_registry.contains_key(&account_id)
     }
 
     fn internal_get_total_token_supply(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.fungible_token.get_total_token_supply())
+        Ok(self.fungible_token.total_supply)
     }
 
     fn internal_get_stakers_quantity(&self) -> u64 {
-        self.fungible_token.get_token_accounts_quantity()
+        self.fungible_token.token_accounts_quantity
     }
 
     fn internal_get_storage_staking_price_per_additional_token_account(&self) -> Result<Balance, BaseError> {
@@ -346,13 +371,18 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_get_token_account_balance(&self, account_id: AccountId) -> Result<Balance, BaseError> {
-        self.fungible_token.get_token_account_balance(&account_id)
+        match self.fungible_token.token_account_registry.get(&account_id) {
+            Some(yocto_token_balance_) => Ok(yocto_token_balance_),
+            None => {
+                return Err(BaseError::TokenAccountIsNotRegistered);
+            }
+        }
     }
 
     fn internal_get_available_for_staking_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.get_available_for_staking_balance())
+        Ok(self.management_fund.available_for_staking_balance)
     }
 
     fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
@@ -386,10 +416,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Ok(
             AggregatedInformation {
-                available_for_staking_balance: self.management_fund.get_available_for_staking_balance().into(),
+                available_for_staking_balance: self.management_fund.available_for_staking_balance.into(),
                 staked_balance: self.management_fund.get_staked_balance().into(),
-                token_total_supply: self.fungible_token.get_total_token_supply().into(),
-                token_accounts_quantity: self.fungible_token.get_token_accounts_quantity(),
+                token_total_supply: self.fungible_token.total_supply.into(),
+                token_accounts_quantity: self.fungible_token.token_accounts_quantity,
                 total_rewards_from_validators_yocto_near_amount: self.total_rewards_from_validators_yocto_near_amount.into(),
                 rewards_fee: self.fee_registry.rewards_fee.clone()
             }
@@ -413,14 +443,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(                  // TODO Проверить Округление
             (
                 U256::from(yocto_near_amount)
-                * U256::from(self.fungible_token.get_total_token_supply())
+                * U256::from(self.fungible_token.total_supply)
                 / U256::from(self.management_fund.get_management_fund_amount()?)
             ).as_u128()
         )
     }
 
     fn convert_yocto_token_amount_to_yocto_near_amount(&self, yocto_token_amount: Balance) -> Result<Balance, BaseError> {
-        if self.fungible_token.get_total_token_supply() == 0 {
+        if self.fungible_token.total_supply == 0 {
             return Ok(yocto_token_amount);
         }
 
@@ -428,7 +458,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             (
                 U256::from(yocto_token_amount)
                 * U256::from(self.management_fund.get_management_fund_amount()?)
-                / U256::from(self.fungible_token.get_total_token_supply())
+                / U256::from(self.fungible_token.total_supply)
             ).as_u128()
         )
     }

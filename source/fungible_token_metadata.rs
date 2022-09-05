@@ -6,32 +6,30 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct FungibleTokenMetadata {
-    spec: String,
-    name: String,
-    symbol: String,
-    icon: Option<String>,
-    reference: Option<String>,
-    reference_hash: Option<Base64VecU8>,
-    decimals: u8,
+    pub spec: String,
+    pub name: String,
+    pub symbol: String,
+    pub icon: Option<String>,
+    pub reference: Option<String>,
+    pub reference_hash: Option<Base64VecU8>,
+    pub decimals: u8,
 }
 
 impl FungibleTokenMetadata {
-    pub fn new(
-        name: String,
-        symbol: String,
-        icon: Option<String>,
-        reference: Option<String>,
-        reference_hash: Option<Base64VecU8>,
-        decimals: u8,
-    ) -> Self {
+    const TOKEN_IMAGE_PATH: &'static str = "todo_path";
+    const TOKEN_NAME:  &'static str = "todo_name";
+    const TOKEN_SYMPOL:  &'static str = "todo_symbol";
+    const TOKEN_DECIMALS: u8 = 24;
+
+    pub fn new() -> Self {
         Self {
             spec: FT_METADATA_SPEC.to_string(),
-            name,
-            symbol,
-            icon,
-            reference,
-            reference_hash,
-            decimals
+            name: Self::TOKEN_NAME.to_string(),
+            symbol: Self::TOKEN_SYMPOL.to_string(),
+            icon: Some(Self::TOKEN_IMAGE_PATH.to_string()),
+            reference: None,                                            // TODO TODO TODO TODO TODO что это
+            reference_hash: None,                                       // TODO TODO TODO TODO TODO что это
+            decimals: Self::TOKEN_DECIMALS
         }
     }
 

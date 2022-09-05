@@ -12,8 +12,8 @@ construct_uint! {
 #[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Fee {
-    numerator: u64,
-    denominator: u64
+    pub numerator: u64,
+    pub denominator: u64
 }
 
 impl Fee {
