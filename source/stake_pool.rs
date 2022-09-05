@@ -129,8 +129,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
+        if yocto_near_amount > self.management_fund.get_available_for_staking_balance() {
+            return Err(BaseError::InsufficientAvailableForStakingBalance);
+        }
 
-// TODO проверки, имеется ли столько у пользоватея
+        let account_yocto_token_amount = self.fungible_token.get_token_account_balance(&account_id)?;
+        if yocto_token_amount > account_yocto_token_amount {
+            return Err(BaseError::InsufficientTokenAccountBalance);
+        }
 
         self.fungible_token.decrease_token_account_balance(&account_id, yocto_token_amount)?;
         self.management_fund.decrease_available_for_staking_balance(yocto_near_amount)?;
@@ -158,6 +164,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let mut yocto_near_amount = self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)?;
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
+        }
+        if yocto_near_amount > self.management_fund.get_available_for_staking_balance() {
+            return Err(BaseError::InsufficientAvailableForStakingBalance);
+        }
+
+        let account_yocto_token_amount = self.fungible_token.get_token_account_balance(&account_id)?;
+        if yocto_token_amount > account_yocto_token_amount {
+            return Err(BaseError::InsufficientTokenAccountBalance);
         }
 
         todo!();
