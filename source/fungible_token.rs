@@ -37,17 +37,6 @@ impl FungibleToken {                                        // TODO стоит �
         )
     }
 
-    pub fn get_storage_staking_price_per_additional_token_account(&self) -> Result<Balance, BaseError> {
-        match Balance::from(self.storage_usage_per_token_account).checked_mul(env::storage_byte_cost()) {
-            Some(value) => {
-                Ok(value)
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        }
-    }
-
     fn calculate_storage_usage_per_additional_token_account() -> Result<StorageUsage, BaseError> {
         let mut token_account_registry = Self::initialize_token_account_registry();
 

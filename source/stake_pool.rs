@@ -1,5 +1,5 @@
 use core::convert::Into;
-use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult};
+use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
@@ -95,7 +95,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let mut yocto_token_balance: Balance = match self.fungible_token.token_account_registry.get(&account_id) {
             Some(yocto_token_balance_) => yocto_token_balance_,
             None => {
-                let storage_staking_price_per_additional_token_account = self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
+                let storage_staking_price_per_additional_token_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_token_account)?;
                 if yocto_near_amount < storage_staking_price_per_additional_token_account {
                     return Err(BaseError::InsufficientNearDepositForStorageStaking);
                 }
@@ -162,7 +162,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
             self.fungible_token.token_accounts_quantity -= 1;
 
-            yocto_near_amount += self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
+            yocto_near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_token_account)?;
         }
 
         self.fungible_token.total_supply -= yocto_token_amount;
@@ -369,7 +369,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_get_storage_staking_price_per_additional_token_account(&self) -> Result<Balance, BaseError> {
-        self.fungible_token.get_storage_staking_price_per_additional_token_account()
+        Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_token_account)
     }
 
     fn internal_get_yocto_token_amount_from_yocto_near_amount(&self, yocto_near_amount: Balance) -> Result<Balance, BaseError> {
@@ -545,6 +545,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     pub fn get_validating_node(&mut self) -> &mut ValidatingNode {
         &mut self.validating_node
+    }
+
+    pub fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Result<Balance, BaseError> {
+        match Balance::from(quantity_of_bytes).checked_mul(env::storage_byte_cost()) {
+            Some(value) => {
+                Ok(value)
+            }
+            None => {
+                return Err(BaseError::CalculationOwerflow);
+            }
+        }
     }
 }
 
