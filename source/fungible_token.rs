@@ -4,6 +4,7 @@ use near_sdk::collections::{LazyOption, LookupMap};
 use super::base_error::BaseError;
 use super::fungible_token_metadata::FungibleTokenMetadata;
 use super::storage_key::StorageKey;
+use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct FungibleToken {
@@ -16,9 +17,7 @@ pub struct FungibleToken {
     pub token_metadata: LazyOption<FungibleTokenMetadata>,
 }
 
-impl FungibleToken {                                        // TODO стоит ли продублировать зашиту в методах
-    const MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;
-
+impl FungibleToken {
     pub fn new(owner_id: AccountId) -> Result<Self, BaseError> {
         let fungible_token_metadata = FungibleTokenMetadata::new();
         if !fungible_token_metadata.is_valid() {
@@ -42,7 +41,7 @@ impl FungibleToken {                                        // TODO стоит �
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(Self::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         token_account_registry.insert(&account_id, &0);
 
