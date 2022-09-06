@@ -8,7 +8,7 @@ use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
 pub struct ValidatorInfo {
     delayed_unstake_validator_group: DelayedUnstakeValidatorGroup,
     staking_contract_version: ValidatorStakingContractVersion,
-    staked_balance: Balance,
+    pub staked_balance: Balance,
     last_update_info_epoch_height: EpochHeight,
     last_stake_increasing_epoch_height: Option<EpochHeight>
 }

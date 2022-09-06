@@ -3,8 +3,8 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use super::base_error::BaseError;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
-use super::storage_key::StorageKey;
 use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
+use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ManagementFund {

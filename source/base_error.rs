@@ -29,7 +29,8 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     ValidatorAccountsZeroQuantity,
     InsufficientAvailableForStakingBalance,
     ValidatorInfoAlreadyUpdated,
-    SomeValidatorInfoDoesNotUpdated
+    SomeValidatorInfoDoesNotUpdated,
+    RemovingValidatorWithExistingBalance
 }
 
 impl Error for BaseError {}
@@ -111,6 +112,9 @@ impl Display for BaseError {
             }
             Self::SomeValidatorInfoDoesNotUpdated => {
                 formatter.write_str("The information about some validators does not updated.")?;
+            }
+            Self::RemovingValidatorWithExistingBalance => {
+                formatter.write_str("The validator has a non-zero balance, so it cannot be removed.")?;
             }
         }
 

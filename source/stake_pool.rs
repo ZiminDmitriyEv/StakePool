@@ -11,6 +11,7 @@ use super::fungible_token::FungibleToken;
 use super::management_fund::ManagementFund;
 use super::validating_node::ValidatingNode;
 use super::validator_info_dto::ValidatorInfoDto;
+use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 use uint::construct_uint;
 
@@ -217,12 +218,25 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
-        self.validating_node.register_validator_account(&validator_account_id, validator_staking_contract_version, delayed_unstake_validator_group)?;
+
+        if let Some(maximium_quantity) = self.validating_node.validator_accounts_maximum_quantity {
+            if self.validating_node.validator_accounts_quantity == maximium_quantity {
+                return Err(BaseError::ValidatorAccountsMaximumQuantityExceeding);
+            }
+        }
+
+        if let Some(_) = self.validating_node.validator_account_registry.insert(
+            &validator_account_id, &ValidatorInfo::new(validator_staking_contract_version, delayed_unstake_validator_group)
+        ) {
+            return Err(BaseError::ValidatorAccountIsAlreadyRegistered);
+        }
+        self.validating_node.validator_accounts_quantity += 1;
+        self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;     // TODO вот это точно ли нужно
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
             Promise::new(env::predecessor_account_id())
-                .transfer(yocto_near_amount);   // TODO написать в коллбеке ретурн отсюда
+                .transfer(yocto_near_amount);   // TODO Нужен ли коллбек?
         }
 
         Ok(())
@@ -232,7 +246,19 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        self.validating_node.unregister_validator_account(&validator_account_id)?;
+        match self.validating_node.validator_account_registry.remove(&validator_account_id) {
+            Some(validator_info) => {
+                if validator_info.staked_balance > 0 {
+                    return Err(BaseError::RemovingValidatorWithExistingBalance);
+                }
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
+
+        self.validating_node.validator_accounts_quantity -= 1;
+        self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch -= 1;    // TODO  вот это точно ли нужно относительно internal_add_validator
 
         Ok(
             Promise::new(env::predecessor_account_id())

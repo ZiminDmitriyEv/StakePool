@@ -17,13 +17,13 @@ use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
     /// Must be changed each epoch to the next value.
-    current_delayed_unstake_validator_group: DelayedUnstakeValidatorGroup,
-    validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
-    validator_accounts_quantity: u64,
-    validator_accounts_maximum_quantity: Option<u64>,
-    quantity_of_validators_accounts_updated_in_current_epoch: u64,
+    pub current_delayed_unstake_validator_group: DelayedUnstakeValidatorGroup,
+    pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
+    pub validator_accounts_quantity: u64,
+    pub validator_accounts_maximum_quantity: Option<u64>,
+    pub quantity_of_validators_accounts_updated_in_current_epoch: u64,
     /// In bytes.
-    storage_usage_per_validator_account: StorageUsage,
+    pub storage_usage_per_validator_account: StorageUsage,
 }
 
 impl ValidatingNode {
@@ -41,46 +41,6 @@ impl ValidatingNode {
                 storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?
             }
         )
-    }
-
-    pub fn register_validator_account(
-        &mut self,
-        validator_account_id: &AccountId,
-        staking_contract_version: ValidatorStakingContractVersion,
-        delayed_unstake_validator_group: DelayedUnstakeValidatorGroup
-    ) -> Result<(), BaseError> {
-        if let Some(maximium_quantity) = self.validator_accounts_maximum_quantity {
-            if self.validator_accounts_quantity >= maximium_quantity {
-                return Err(BaseError::ValidatorAccountsMaximumQuantityExceeding);
-            }
-        }
-
-        if let Some(_) = self.validator_account_registry.insert(
-            validator_account_id, &ValidatorInfo::new(staking_contract_version, delayed_unstake_validator_group)
-        ) {
-            return Err(BaseError::ValidatorAccountIsAlreadyRegistered);
-        }
-        self.validator_accounts_quantity += 1;
-        self.quantity_of_validators_accounts_updated_in_current_epoch += 1;
-
-        Ok(())
-    }
-
-    pub fn unregister_validator_account(
-        &mut self, validator_account_id: &AccountId
-    ) -> Result<(), BaseError> {
-        if let None = self.validator_account_registry.remove(validator_account_id) {
-            return Err(BaseError::ValidatorAccountIsNotRegistered);
-        }
-        if self.validator_accounts_quantity == 0 {
-            return Err(BaseError::Logic);
-        }
-
-    // TODO проверить, есть ли на валидаторе деньги. если нет, то можно
-        self.validator_accounts_quantity -= 1;
-        self.quantity_of_validators_accounts_updated_in_current_epoch -= 1;
-
-        Ok(())
     }
 
     pub fn increase_validator_stake(    // TODO Пока это делает на итерациях с клиента, могут сделать депозит или снять наоборот. Определиться, как работает клиет. Ситуация, когда идет распределение в процессе, и кто-то кладт стейк или выводит
