@@ -12,9 +12,9 @@ pub struct FungibleToken {
     pub total_supply: Balance,
     pub token_account_registry: LookupMap<AccountId, Balance>,
     pub token_accounts_quantity: u64,
-    /// In bytes.
-    pub storage_usage_per_token_account: StorageUsage,
     pub token_metadata: LazyOption<FungibleTokenMetadata>,
+        /// In bytes.
+    pub storage_usage_per_token_account: StorageUsage,
 }
 
 impl FungibleToken {
@@ -30,8 +30,8 @@ impl FungibleToken {
                 total_supply: 0,
                 token_account_registry: Self::initialize_token_account_registry(),
                 token_accounts_quantity: 0,
-                storage_usage_per_token_account: Self::calculate_storage_usage_per_additional_token_account()?,
-                token_metadata: Self::initialize_fungible_token_metadata(&fungible_token_metadata)
+                token_metadata: Self::initialize_fungible_token_metadata(&fungible_token_metadata),
+                storage_usage_per_token_account: Self::calculate_storage_usage_per_additional_token_account()?
             }
         )
     }

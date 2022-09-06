@@ -9,11 +9,11 @@ use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ManagementFund {
     pub available_for_staking_balance: Balance,
-    staked_balance: Balance,
-    delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
-    is_distributed_on_validators_in_current_epoch: bool,
+    pub staked_balance: Balance,
+    pub delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
+    pub is_distributed_on_validators_in_current_epoch: bool,
     /// In bytes.
-    storage_usage_per_delayed_withdrawal_account: StorageUsage,
+    pub storage_usage_per_delayed_withdrawal_account: StorageUsage,
 }
 
 impl ManagementFund {
