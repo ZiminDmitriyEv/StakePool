@@ -64,10 +64,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         };
 
         // TODO rewards_receiver_account_id != everstake_rewards_receiver_account_id
-
         // TODO Взять деньги (зарезервировать) для регистрации этих двуз аккаунтов lido_rewards_receiver_account_id,
                 // everstake_rewards_receiver_account_id,
                 // !!!!!!!!!!!!!!
+        // TODO ЗАрегистрировать эти два токен аккаунта, и не удалять их, если с них снимаются в ноль. ОБРАТИТЬ ВНИМАНИЕ, ЧТО СНЯТИЕ в НОЛЬ ВЛЕЕТ удаление. А они не должны быть удалены
 
         Ok(
             Self {
@@ -91,27 +91,35 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let account_id = env::predecessor_account_id();
 
-        let mut net_convertible_yocto_near_amount = env::attached_deposit();
-        if !self.fungible_token.token_account_registry.contains_key(&account_id) {
-            let storage_staking_price_per_additional_token_account = self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
-            if net_convertible_yocto_near_amount < storage_staking_price_per_additional_token_account {
-                return Err(BaseError::InsufficientNearDepositForStorageStaking);
-            }
-            net_convertible_yocto_near_amount = net_convertible_yocto_near_amount - storage_staking_price_per_additional_token_account;
+        let mut yocto_near_amount = env::attached_deposit();
+        let mut yocto_token_balance: Balance = match self.fungible_token.token_account_registry.get(&account_id) {
+            Some(yocto_token_balance_) => yocto_token_balance_,
+            None => {
+                let storage_staking_price_per_additional_token_account = self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
+                if yocto_near_amount < storage_staking_price_per_additional_token_account {
+                    return Err(BaseError::InsufficientNearDepositForStorageStaking);
+                }
+                yocto_near_amount -= storage_staking_price_per_additional_token_account;
 
-            self.fungible_token.register_token_account(&account_id)?;
-        }
-        if net_convertible_yocto_near_amount == 0 {
+                self.fungible_token.token_accounts_quantity += 1;
+
+                0
+            }
+        };
+        if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientNearDeposit);
         }
 
-        let yocto_token_amount = self.convert_yocto_near_amount_to_yocto_token_amount(net_convertible_yocto_near_amount)?;
+        let yocto_token_amount = self.convert_yocto_near_amount_to_yocto_token_amount(yocto_near_amount)?;
         if yocto_token_amount == 0 {
             return Err(BaseError::InsufficientNearDeposit);
         }
 
-        self.fungible_token.increase_token_account_balance(&account_id, yocto_token_amount)?;
-        self.management_fund.increase_available_for_staking_balance(net_convertible_yocto_near_amount)?;
+        yocto_token_balance += yocto_token_amount;
+
+        self.management_fund.available_for_staking_balance += yocto_near_amount;
+        self.fungible_token.total_supply += yocto_token_amount;
+        self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
 
         Ok(())
     }
@@ -157,13 +165,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             yocto_near_amount += self.fungible_token.get_storage_staking_price_per_additional_token_account()?;
         }
 
-        self.fungible_token.total_supply = match self.fungible_token.total_supply
-            .checked_sub(yocto_token_amount) {
-            Some(total_supply_) => total_supply_,
-            None => {
-                return Err(BaseError::Logic);
-            }
-        };
+        self.fungible_token.total_supply -= yocto_token_amount;
 
         Ok(
             Promise::new(account_id)
@@ -283,21 +285,33 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
             let rewards_fee_yocto_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_yocto_token_amount);
             if rewards_fee_yocto_token_amount != 0 {
-                if !self.fungible_token.token_account_registry.contains_key(&self.rewards_receiver_account_id) {
-                    self.fungible_token.register_token_account(&self.rewards_receiver_account_id)?;
-                }
+                match self.fungible_token.token_account_registry.get(&self.rewards_receiver_account_id) {
+                    Some(mut yocto_token_balance) => {
+                        yocto_token_balance += rewards_fee_yocto_token_amount;
 
-                self.fungible_token.increase_token_account_balance(&self.rewards_receiver_account_id, rewards_fee_yocto_token_amount)?;
+                        self.fungible_token.total_supply += rewards_fee_yocto_token_amount;
+                        self.fungible_token.token_account_registry.insert(&self.rewards_receiver_account_id, &yocto_token_balance);
+                    }
+                    None => {
+                        return Err(BaseError::Logic);
+                    }
+                }
             }
 
             if let Some(ref everstake_rewards_fee) = self.fee_registry.everstake_rewards_fee {
                 let everstake_rewards_fee_yocto_token_amount = everstake_rewards_fee.multiply(rewards_fee_yocto_token_amount);
                 if everstake_rewards_fee_yocto_token_amount != 0 {
-                    if !self.fungible_token.token_account_registry.contains_key(&self.everstake_rewards_receiver_account_id) {
-                        self.fungible_token.register_token_account(&self.everstake_rewards_receiver_account_id)?;
-                    }
+                    match self.fungible_token.token_account_registry.get(&self.everstake_rewards_receiver_account_id) {
+                        Some(mut yocto_token_balance) => {
+                            yocto_token_balance += everstake_rewards_fee_yocto_token_amount;
 
-                    self.fungible_token.increase_token_account_balance(&self.everstake_rewards_receiver_account_id, everstake_rewards_fee_yocto_token_amount)?;
+                            self.fungible_token.total_supply += everstake_rewards_fee_yocto_token_amount;
+                            self.fungible_token.token_account_registry.insert(&self.everstake_rewards_receiver_account_id, &yocto_token_balance);
+                        }
+                        None => {
+                            return Err(BaseError::Logic);
+                        }
+                    }
                 }
             }
         }
