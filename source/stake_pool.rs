@@ -275,8 +275,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             self.previous_epoch_rewards_from_validators_yocto_near_amount
         )?;
 
-        self.management_fund.increase_staked_balance(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
-        self.management_fund.set_is_distributed_on_validators_in_current_epoch(false);
+        self.management_fund.staked_balance += self.previous_epoch_rewards_from_validators_yocto_near_amount;
+        self.management_fund.is_distributed_on_validators_in_current_epoch = false;
         self.validating_node.update();
         self.current_epoch_height = env::epoch_height();
         self.increase_total_rewards_from_validators_yocto_near_amount(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
@@ -402,13 +402,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.get_staked_balance())
+        Ok(self.management_fund.staked_balance)
     }
 
     fn internal_get_management_fund_amount(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.get_management_fund_amount()?)
+        Ok(self.management_fund.get_management_fund_amount())
     }
 
     fn internal_get_fee_registry(&self) -> Result<FeeRegistry, BaseError> {
@@ -431,7 +431,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(
             AggregatedInformation {
                 available_for_staking_balance: self.management_fund.available_for_staking_balance.into(),
-                staked_balance: self.management_fund.get_staked_balance().into(),
+                staked_balance: self.management_fund.staked_balance.into(),
                 token_total_supply: self.fungible_token.total_supply.into(),
                 token_accounts_quantity: self.fungible_token.token_accounts_quantity,
                 total_rewards_from_validators_yocto_near_amount: self.total_rewards_from_validators_yocto_near_amount.into(),
@@ -444,13 +444,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        self.management_fund.set_is_distributed_on_validators_in_current_epoch(true);
+        self.management_fund.is_distributed_on_validators_in_current_epoch = true;
 
         Ok(())
     }
 
     fn convert_yocto_near_amount_to_yocto_token_amount(&self, yocto_near_amount: Balance) -> Result<Balance, BaseError> {
-        if self.management_fund.get_management_fund_amount()? == 0 {
+        if self.management_fund.get_management_fund_amount() == 0 {
             return Ok(yocto_near_amount);
         }
 
@@ -458,7 +458,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             (
                 U256::from(yocto_near_amount)
                 * U256::from(self.fungible_token.total_supply)
-                / U256::from(self.management_fund.get_management_fund_amount()?)
+                / U256::from(self.management_fund.get_management_fund_amount())
             ).as_u128()
         )
     }
@@ -471,7 +471,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(         // TODO Проверить Округление
             (
                 U256::from(yocto_token_amount)
-                * U256::from(self.management_fund.get_management_fund_amount()?)
+                * U256::from(self.management_fund.get_management_fund_amount())
                 / U256::from(self.fungible_token.total_supply)
             ).as_u128()
         )
@@ -807,7 +807,7 @@ impl StakePool {
     }
 
     pub fn is_stake_distributed(&self) -> bool {
-        self.management_fund.get_is_distributed_on_validators_in_current_epoch()
+        self.management_fund.is_distributed_on_validators_in_current_epoch
     }
 
     pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)

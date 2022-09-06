@@ -228,8 +228,8 @@ impl StakePool {
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
                 let management_fund = self.get_management_fund();
-                management_fund.decrease_available_for_staking_balance(staked_yocto_near_amount).unwrap();     // TODO unwrap, может, перейти на set get
-                management_fund.increase_staked_balance(staked_yocto_near_amount).unwrap();    // TODO unwrap
+                management_fund.available_for_staking_balance -= staked_yocto_near_amount;
+                management_fund.staked_balance += staked_yocto_near_amount;
 
                 let validating_node = self.get_validating_node();
 
@@ -280,7 +280,7 @@ impl StakePool {
                 validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
                 validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;
 
-                self.get_management_fund().increase_staked_balance(staking_rewards_yocto_near_amount).unwrap();
+                self.get_management_fund().staked_balance += staking_rewards_yocto_near_amount;
                 self.increase_previous_epoch_rewards_from_validators_yocto_near_amount(staking_rewards_yocto_near_amount).unwrap();
 
                 (true, env::epoch_height())

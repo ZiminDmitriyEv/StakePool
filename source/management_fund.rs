@@ -29,84 +29,8 @@ impl ManagementFund {
         )
     }
 
-    pub fn increase_available_for_staking_balance(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
-        self.available_for_staking_balance = match self.available_for_staking_balance
-            .checked_add(yocto_near_amount) {
-            Some(available_for_staking_balance_) => {
-                available_for_staking_balance_
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn decrease_available_for_staking_balance(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
-        self.available_for_staking_balance = match self.available_for_staking_balance
-            .checked_sub(yocto_near_amount) {
-            Some(available_for_staking_balance_) => {
-                available_for_staking_balance_
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn increase_staked_balance(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
-        self.staked_balance = match self.staked_balance
-            .checked_add(yocto_near_amount) {
-            Some(staked_balance_) => {
-                staked_balance_
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn decrease_staked_balance(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
-        self.staked_balance = match self.staked_balance
-            .checked_sub(yocto_near_amount) {
-            Some(staked_balance_) => {
-                staked_balance_
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn set_is_distributed_on_validators_in_current_epoch(&mut self, is_distributed_on_validators_in_current_epoch: bool) {
-        self.is_distributed_on_validators_in_current_epoch = is_distributed_on_validators_in_current_epoch;
-    }
-
-    pub fn get_staked_balance(&self) -> Balance {
-        self.staked_balance
-    }
-
-    pub fn get_is_distributed_on_validators_in_current_epoch(&self) -> bool {
-        self.is_distributed_on_validators_in_current_epoch
-    }
-
-    pub fn get_management_fund_amount(&self) -> Result<Balance, BaseError> {
-        match self.available_for_staking_balance
-            .checked_add(self.staked_balance) {
-            Some(management_fund_amount) => {
-                Ok(management_fund_amount)
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        }
+    pub fn get_management_fund_amount(&self) -> Balance {
+        self.available_for_staking_balance + self.staked_balance
     }
 
     fn calculate_storage_usage_per_additional_delayed_withdrawal_account() -> Result<StorageUsage, BaseError> {
