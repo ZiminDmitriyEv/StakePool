@@ -282,7 +282,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         match self.validating_node.validator_account_registry.get(&validator_account_id) {
             Some(validator_info) => {
-                match *validator_info.get_staking_contract_version() {
+                match validator_info.staking_contract_version {
                     ValidatorStakingContractVersion::Classic => {
                         return Ok(
                             ext_staking_pool::ext(validator_account_id.clone())
@@ -313,10 +313,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         match self.validating_node.validator_account_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
             Some(validator_info) => {
-                let current_epoch_haight = env::epoch_height();
+                let current_epoch_height = env::epoch_height();
 
-                if validator_info.get_last_update_info_epoch_haight() < current_epoch_haight {
-                    match *validator_info.get_staking_contract_version() {
+                if validator_info.last_update_info_epoch_height < current_epoch_height {
+                    match validator_info.staking_contract_version {
                         ValidatorStakingContractVersion::Classic => {
                             return Ok(
                                 ext_staking_pool::ext(validator_account_id.clone())
@@ -324,7 +324,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                     .get_account_total_balance(env::current_account_id())
                                     .then(
                                         Self::ext(env::current_account_id())           // TODO TODO TODO TODO  смотреть, точно ли этот адрес
-                                            .update_validator_info_callback(&validator_account_id, current_epoch_haight)
+                                            .update_validator_info_callback(&validator_account_id, current_epoch_height)
                                     )
                                 );
                         }
@@ -502,13 +502,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let mut validator_info_dto_registry: Vec<ValidatorInfoDto> = vec![];
 
         for (account_id, validator_info) in self.validating_node.validator_account_registry.into_iter() {
-            let (
-                _delayed_unstake_validator_group,
-                _staking_contract_version,
+            let ValidatorInfo {
+                delayed_unstake_validator_group: _,
+                staking_contract_version: _,
                 staked_balance,
                 last_update_info_epoch_height,
                 last_stake_increasing_epoch_height
-            ) = validator_info.into_inner();
+            } = validator_info;
 
             validator_info_dto_registry.push(
                 ValidatorInfoDto {
@@ -921,8 +921,8 @@ impl StakePool {
                 self.management_fund.staked_balance += staked_yocto_near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
-                validator_info.increase_staked_balance(staked_yocto_near_amount).unwrap();       // TODO unwrap
-                validator_info.set_last_stake_increasing_epoch_height(current_epoch_height);
+                validator_info.staked_balance += staked_yocto_near_amount;
+                validator_info.last_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
 
                 true
@@ -958,8 +958,8 @@ impl StakePool {
                     env::panic_str("Contract logic error.");        // TODO  как обоработать. Может, возвращать структуры ?
                 };
 
-                validator_info.set_last_update_info_epoch_height(current_epoch_height);
-                validator_info.set_staked_balance(new_staked_balance);
+                validator_info.last_update_info_epoch_height = current_epoch_height;
+                validator_info.staked_balance = new_staked_balance;
 
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
                 self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;
