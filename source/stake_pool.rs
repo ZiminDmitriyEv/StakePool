@@ -22,7 +22,7 @@ construct_uint! {
 
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-pub struct StakePool {
+pub struct StakePool {      // TODO Можно перенести Структуру в место, где будут все структуры. А Функциональность оставить. Раз я решил делать Публичные поля
     owner_id: AccountId,
     manager_id: AccountId,
     rewards_receiver_account_id: AccountId,
@@ -511,7 +511,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             ) = validator_info.into_inner();
 
             validator_info_dto_registry.push(
-                ValidatorInfoDto::new(account_id, staked_balance, last_update_info_epoch_height, last_stake_increasing_epoch_height)
+                ValidatorInfoDto {
+                    account_id,
+                    staked_balance: staked_balance.into(),
+                    last_update_info_epoch_height,
+                    last_stake_increasing_epoch_height
+                }
             );
         }
 
