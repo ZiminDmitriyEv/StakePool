@@ -193,20 +193,22 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if yocto_near_amount > self.management_fund.available_for_staking_balance {
-            return Err(BaseError::InsufficientAvailableForStakingBalance);
+        if yocto_near_amount > self.management_fund.staked_balance {
+            return Err(BaseError::InsufficientStakedBalance);
         }
 
-        let account_yocto_token_amount = match self.fungible_token.token_account_registry.get(&account_id) {
+        let yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
             Some(yocto_token_balance_) => yocto_token_balance_,
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
             }
         };
-
-        if yocto_token_amount > account_yocto_token_amount {
+        if yocto_token_balance < yocto_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
+
+
+
 // Не удалять аккаунт, если сняли в ноль, но это ревардс-ресиверы
         todo!();
     }
@@ -295,7 +297,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                 .deposit_and_stake()
                                 .then(
-                                    Self::ext(env::current_account_id())           // TODO TODO TODO TODO точно ли этот аккаунт
+                                    Self::ext(env::current_account_id())
                                         .increase_validator_stake_callback(
                                             &validator_account_id, yocto_near_amount, env::epoch_height()
                                         )
@@ -328,7 +330,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                     // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                     .get_account_total_balance(env::current_account_id())
                                     .then(
-                                        Self::ext(env::current_account_id())           // TODO TODO TODO TODO  смотреть, точно ли этот адрес
+                                        Self::ext(env::current_account_id())
                                             .update_validator_info_callback(&validator_account_id, current_epoch_height)
                                     )
                                 );
