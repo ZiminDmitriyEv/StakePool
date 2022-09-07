@@ -45,8 +45,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         everstake_rewards_fee: Option<Fee>,
         validators_maximum_quantity: Option<u64>
     ) -> Result<Self, BaseError> {
+        // TODO Посмотреть, сколько нужно для хранения всего стейта ниже. Остальной депозит пололожить в качестве стейка.
+
         if env::state_exists() {
             return Err(BaseError::ContractStateAlreadyInitialized);
+        }
+
+        if rewards_receiver_account_id == everstake_rewards_receiver_account_id {
+            return Err(BaseError::SameAccountId);
         }
 
         if let Some(ref rewards_fee_) = rewards_fee {
@@ -65,27 +71,23 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         };
 
-        // TODO rewards_receiver_account_id != everstake_rewards_receiver_account_id
-        // TODO Взять деньги (зарезервировать) для регистрации этих двуз аккаунтов lido_rewards_receiver_account_id,
-                // everstake_rewards_receiver_account_id,
-                // !!!!!!!!!!!!!!
-        // TODO ЗАрегистрировать эти два токен аккаунта, и не удалять их, если с них снимаются в ноль. ОБРАТИТЬ ВНИМАНИЕ, ЧТО СНЯТИЕ в НОЛЬ ВЛЕЕТ удаление. А они не должны быть удалены
+        let mut stake_pool = Self {
+            owner_id: env::predecessor_account_id(),
+            manager_id: manager_id_,
+            rewards_receiver_account_id: rewards_receiver_account_id.clone(),
+            everstake_rewards_receiver_account_id: everstake_rewards_receiver_account_id.clone(),
+            fee_registry: FeeRegistry { rewards_fee, everstake_rewards_fee },
+            fungible_token: FungibleToken::new(env::predecessor_account_id())?,
+            management_fund: ManagementFund::new()?,
+            validating_node: ValidatingNode::new(validators_maximum_quantity)?,
+            current_epoch_height: env::epoch_height(),
+            previous_epoch_rewards_from_validators_yocto_near_amount: 0,
+            total_rewards_from_validators_yocto_near_amount: 0
+        };
+        stake_pool.fungible_token.token_account_registry.insert(&rewards_receiver_account_id, &0);
+        stake_pool.fungible_token.token_account_registry.insert(&everstake_rewards_receiver_account_id, &0);
 
-        Ok(
-            Self {
-                owner_id: env::predecessor_account_id(),
-                manager_id: manager_id_,
-                rewards_receiver_account_id,
-                everstake_rewards_receiver_account_id,
-                fee_registry: FeeRegistry { rewards_fee, everstake_rewards_fee },
-                fungible_token: FungibleToken::new(env::predecessor_account_id())?,
-                management_fund: ManagementFund::new()?,
-                validating_node: ValidatingNode::new(validators_maximum_quantity)?,
-                current_epoch_height: env::epoch_height(),
-                previous_epoch_rewards_from_validators_yocto_near_amount: 0,
-                total_rewards_from_validators_yocto_near_amount: 0
-            }
-        )
+        Ok(stake_pool)
     }
 
     fn internal_deposit(&mut self) -> Result<(), BaseError> {       // TODO TODO TODO TODO TODO Нужно ли делать так, чтобы еслм  is_distributed_on_validators_in_current_epoch, то кладем сразу на Префферед валидатор
@@ -156,7 +158,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.management_fund.available_for_staking_balance -= yocto_near_amount;
 
-        if yocto_token_balance > 0 {
+        if yocto_token_balance > 0
+            || account_id == self.rewards_receiver_account_id
+            || account_id == self.everstake_rewards_receiver_account_id  {
             self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
         } else {
             if let None = self.fungible_token.token_account_registry.remove(&account_id) {
@@ -202,7 +206,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_token_amount > account_yocto_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
-
+// Не удалять аккаунт, если сняли в ноль, но это ревардс-ресиверы
         todo!();
     }
 

@@ -30,10 +30,11 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     InsufficientAvailableForStakingBalance,
     ValidatorInfoAlreadyUpdated,
     SomeValidatorInfoDoesNotUpdated,
-    RemovingValidatorWithExistingBalance
+    RemovingValidatorWithExistingBalance,
+    SameAccountId
 }
 
-impl Error for BaseError {}
+impl Error for BaseError {}     // TODO Выводить сразу в лог с паникойй. Убрать ошибки?
 
 impl Display for BaseError {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
@@ -115,6 +116,9 @@ impl Display for BaseError {
             }
             Self::RemovingValidatorWithExistingBalance => {
                 formatter.write_str("The validator has a non-zero balance, so it cannot be removed.")?;
+            }
+            Self::SameAccountId => {
+                formatter.write_str("Account Ids should not be the same.")?;
             }
         }
 
