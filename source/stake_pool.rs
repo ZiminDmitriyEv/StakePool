@@ -13,6 +13,7 @@ use super::validating_node::ValidatingNode;
 use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
+use super::xcc_staking_pool::ext_staking_pool;
 use uint::construct_uint;
 
 construct_uint! {
@@ -214,7 +215,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        let storage_staking_price_per_additional_validator_account = self.validating_node.get_storage_staking_price_per_additional_validator_account()?;
+        let storage_staking_price_per_additional_validator_account = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_validator_account)?;
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
@@ -262,7 +263,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Ok(
             Promise::new(env::predecessor_account_id())
-                .transfer(self.validating_node.get_storage_staking_price_per_additional_validator_account()?)
+                .transfer(Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_validator_account)?)
         )
     }
 
@@ -272,12 +273,36 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        let available_for_staking_balance = self.management_fund.available_for_staking_balance;
-        if available_for_staking_balance == 0 || !(1..=available_for_staking_balance).contains(&yocto_near_amount) {
+        if self.management_fund.available_for_staking_balance== 0
+            || !(1..=self.management_fund.available_for_staking_balance).contains(&yocto_near_amount) {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
-        self.validating_node.increase_validator_stake(&validator_account_id, yocto_near_amount)
+        // let deposit_and_stake_gas = Gas(ONE_TERA * Self::DEPOSIT_AND_STAKE_TGAS);           // TODO проверка, сколько газа прикрепили
+
+        match self.validating_node.validator_account_registry.get(&validator_account_id) {
+            Some(validator_info) => {
+                match *validator_info.get_staking_contract_version() {
+                    ValidatorStakingContractVersion::Classic => {
+                        return Ok(
+                            ext_staking_pool::ext(validator_account_id.clone())
+                                .with_attached_deposit(yocto_near_amount)
+                                // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                .deposit_and_stake()
+                                .then(
+                                    Self::ext(env::current_account_id())           // TODO TODO TODO TODO точно ли этот аккаунт
+                                        .increase_validator_stake_callback(
+                                            &validator_account_id, yocto_near_amount, env::epoch_height()
+                                        )
+                                )
+                            );
+                    }
+                }
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
     }
 
     fn internal_update_validator_info(      // TODO TODO TODO Что делать, если в новой эпохе часть обновилась, и уже еще раз наступила новая эпоха, и теперь то, что осталось, обновились. То есть, рассинхронизация состояния.
@@ -286,14 +311,39 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_desynchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        self.validating_node.update_validator_info(&validator_account_id)
+        match self.validating_node.validator_account_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
+            Some(validator_info) => {
+                let current_epoch_haight = env::epoch_height();
+
+                if validator_info.get_last_update_info_epoch_haight() < current_epoch_haight {
+                    match *validator_info.get_staking_contract_version() {
+                        ValidatorStakingContractVersion::Classic => {
+                            return Ok(
+                                ext_staking_pool::ext(validator_account_id.clone())
+                                    // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                    .get_account_total_balance(env::current_account_id())
+                                    .then(
+                                        Self::ext(env::current_account_id())           // TODO TODO TODO TODO  смотреть, точно ли этот адрес
+                                            .update_validator_info_callback(&validator_account_id, current_epoch_haight)
+                                    )
+                                );
+                        }
+                    }
+                }
+
+                return Err(BaseError::ValidatorInfoAlreadyUpdated);
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
     }
 
     fn internal_update(&mut self) -> Result<(), BaseError>{
         self.assert_epoch_is_desynchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        if !self.validating_node.is_all_validators_updated_in_current_epoch() {
+        if self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch != self.validating_node.validator_accounts_quantity {
             return Err(BaseError::SomeValidatorInfoDoesNotUpdated);
         }
 
@@ -303,7 +353,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.management_fund.staked_balance += self.previous_epoch_rewards_from_validators_yocto_near_amount;
         self.management_fund.is_distributed_on_validators_in_current_epoch = false;
-        self.validating_node.update();
+        self.validating_node.current_delayed_unstake_validator_group.set_next();
+        self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch = 0;
         self.current_epoch_height = env::epoch_height();
         self.increase_total_rewards_from_validators_yocto_near_amount(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
         self.previous_epoch_rewards_from_validators_yocto_near_amount = 0;
@@ -448,7 +499,23 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> {
-        self.validating_node.get_validator_info_dto()
+        let mut validator_info_dto_registry: Vec<ValidatorInfoDto> = vec![];
+
+        for (account_id, validator_info) in self.validating_node.validator_account_registry.into_iter() {
+            let (
+                _delayed_unstake_validator_group,
+                _staking_contract_version,
+                staked_balance,
+                last_update_info_epoch_height,
+                last_stake_increasing_epoch_height
+            ) = validator_info.into_inner();
+
+            validator_info_dto_registry.push(
+                ValidatorInfoDto::new(account_id, staked_balance, last_update_info_epoch_height, last_stake_increasing_epoch_height)
+            );
+        }
+
+        validator_info_dto_registry
     }
 
     fn internal_get_aggregated_information(&self) -> Result<AggregatedInformation, BaseError> {
@@ -551,29 +618,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    pub fn increase_previous_epoch_rewards_from_validators_yocto_near_amount(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
-        self.previous_epoch_rewards_from_validators_yocto_near_amount = match self.previous_epoch_rewards_from_validators_yocto_near_amount
-            .checked_add(yocto_near_amount) {
-            Some(previous_epoch_rewards_from_validators_yocto_near_amount_) => {
-                previous_epoch_rewards_from_validators_yocto_near_amount_
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        };
-
-        Ok(())
-    }
-
-    pub fn get_management_fund(&mut self) -> &mut ManagementFund {
-        &mut self.management_fund
-    }
-
-    pub fn get_validating_node(&mut self) -> &mut ValidatingNode {
-        &mut self.validating_node
-    }
-
-    pub fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Result<Balance, BaseError> {
+    fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Result<Balance, BaseError> {
         match Balance::from(quantity_of_bytes).checked_mul(env::storage_byte_cost()) {
             Some(value) => {
                 Ok(value)
@@ -847,6 +892,80 @@ impl StakePool {
             }
             Err(error) => {
                 env::panic_str(format!("{}", error).as_str());
+            }
+        }
+    }
+}
+
+#[near_bindgen]
+impl StakePool {
+    #[private]
+    pub fn increase_validator_stake_callback(
+        &mut self,
+        validator_account_id: &AccountId,
+        staked_yocto_near_amount: Balance,
+        current_epoch_height: EpochHeight
+    ) -> bool {
+        if env::promise_results_count() == 0 {
+            env::panic_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => {
+                self.management_fund.available_for_staking_balance -= staked_yocto_near_amount;
+                self.management_fund.staked_balance += staked_yocto_near_amount;
+
+                let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
+                validator_info.increase_staked_balance(staked_yocto_near_amount).unwrap();       // TODO unwrap
+                validator_info.set_last_stake_increasing_epoch_height(current_epoch_height);
+                self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
+
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+
+    // TODO комментарий написать. Возвращаем и сохраняем епохи в разном состоянии по-разному, чтобы запомнить, что в какой эпохе инициировано по фактту, а в какую выполнен коллбек
+    #[private]
+    pub fn update_validator_info_callback(
+        &mut self,
+        validator_account_id: &AccountId,
+        current_epoch_height: EpochHeight
+    ) -> (bool, EpochHeight) {
+        if env::promise_results_count() == 0 {
+            env::panic_str("Contract expected a result on the callback.");
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(data) => {
+                let new_staked_balance: u128 = near_sdk::serde_json::from_slice::<U128>(data.as_slice()).unwrap().into();          // TODO Что делать с Анврепом
+
+                let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap
+
+                let current_staked_balance = validator_info.staked_balance;
+
+                let staking_rewards_yocto_near_amount = if new_staked_balance >= current_staked_balance {
+                    new_staked_balance - current_staked_balance
+                } else {
+                    env::panic_str("Contract logic error.");        // TODO  как обоработать. Может, возвращать структуры ?
+                };
+
+                validator_info.set_last_update_info_epoch_height(current_epoch_height);
+                validator_info.set_staked_balance(new_staked_balance);
+
+                self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
+                self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;
+
+                self.management_fund.staked_balance += staking_rewards_yocto_near_amount;
+                self.previous_epoch_rewards_from_validators_yocto_near_amount += staking_rewards_yocto_near_amount;
+
+                (true, env::epoch_height())
+            }
+            _ => {
+                (false, env::epoch_height())
             }
         }
     }
