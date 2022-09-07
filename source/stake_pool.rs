@@ -86,6 +86,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         };
         stake_pool.fungible_token.token_account_registry.insert(&rewards_receiver_account_id, &0);
         stake_pool.fungible_token.token_account_registry.insert(&everstake_rewards_receiver_account_id, &0);
+        stake_pool.fungible_token.token_accounts_quantity = 2;
 
         Ok(stake_pool)
     }
