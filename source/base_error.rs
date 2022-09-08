@@ -32,7 +32,8 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     ValidatorInfoAlreadyUpdated,
     SomeValidatorInfoDoesNotUpdated,
     RemovingValidatorWithExistingBalance,
-    SameAccountId
+    SameAccountId,
+    DelayedWithdrawalAccountAlreadyRegistered
 }
 
 impl Error for BaseError {}     // TODO Выводить сразу в лог с паникойй. Убрать ошибки?
@@ -123,6 +124,9 @@ impl Display for BaseError {
             }
             Self::SameAccountId => {
                 formatter.write_str("Account Ids should not be the same.")?;
+            }
+            Self::DelayedWithdrawalAccountAlreadyRegistered => {
+                formatter.write_str("Delayed withdrawal account already registered. Please, wait a few epoch.")?;
             }
         }
 

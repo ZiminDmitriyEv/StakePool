@@ -5,6 +5,7 @@ use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
 use super::base_error::BaseError;
 use super::delayed_unstake_validator_group::DelayedUnstakeValidatorGroup;
+use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
@@ -138,14 +139,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Err(BaseError::InsufficientTokenDeposit);
         }
 
-        let mut yocto_near_amount = self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)?;
-        if yocto_near_amount == 0 {
-            return Err(BaseError::InsufficientTokenDeposit);
-        }
-        if yocto_near_amount > self.management_fund.available_for_staking_balance {
-            return Err(BaseError::InsufficientAvailableForStakingBalance);
-        }
-
         let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
             Some(yocto_token_balance_) => yocto_token_balance_,
             None => {
@@ -155,10 +148,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_token_balance < yocto_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
-        yocto_token_balance -= yocto_token_amount;
 
+        let mut yocto_near_amount = self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)?;
+        if yocto_near_amount == 0 {
+            return Err(BaseError::InsufficientTokenDeposit);
+        }
+        if yocto_near_amount > self.management_fund.available_for_staking_balance {
+            return Err(BaseError::InsufficientAvailableForStakingBalance);
+        }
         self.management_fund.available_for_staking_balance -= yocto_near_amount;
 
+        yocto_token_balance -= yocto_token_amount;
         if yocto_token_balance > 0
             || account_id == self.rewards_receiver_account_id
             || account_id == self.everstake_rewards_receiver_account_id  {
@@ -180,24 +180,32 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_delayed_withdraw(&mut self, yocto_token_amount: u128) -> Result<Promise, BaseError> {
+    fn internal_delayed_withdraw(&mut self, yocto_token_amount: u128) -> Result<(), BaseError> {
         self.assert_epoch_is_synchronized()?;
 
         let account_id = env::predecessor_account_id();
+
+        let mut yocto_near_refundable_deposit = match self.management_fund.delayed_withdrawal_account_registry.get(&account_id) {
+            Some(_) => {
+                return Err(BaseError::DelayedWithdrawalAccountAlreadyRegistered);
+            }
+            None => {
+                let yocto_near_deposit = env::attached_deposit();
+
+                let storage_staking_price_per_additional_delayed_withdrawal_account = Self::calculate_storage_staking_price(self.management_fund.storage_usage_per_delayed_withdrawal_account)?;
+                if yocto_near_deposit < storage_staking_price_per_additional_delayed_withdrawal_account {
+                    return Err(BaseError::InsufficientNearDeposit);
+                }
+
+                yocto_near_deposit - storage_staking_price_per_additional_delayed_withdrawal_account
+            }
+        };
 
         if yocto_token_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
 
-        let mut yocto_near_amount = self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)?;
-        if yocto_near_amount == 0 {
-            return Err(BaseError::InsufficientTokenDeposit);
-        }
-        if yocto_near_amount > self.management_fund.staked_balance {
-            return Err(BaseError::InsufficientStakedBalance);
-        }
-
-        let yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
+        let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
             Some(yocto_token_balance_) => yocto_token_balance_,
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
@@ -207,10 +215,46 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
 
+        let yocto_near_amount = self.convert_yocto_token_amount_to_yocto_near_amount(yocto_token_amount)?;
+        if yocto_near_amount == 0 {
+            return Err(BaseError::InsufficientTokenDeposit);
+        }
+        if yocto_near_amount > self.management_fund.staked_balance {
+            return Err(BaseError::InsufficientStakedBalance);
+        }
 
+        self.management_fund.staked_balance -= yocto_near_amount;
+        self.management_fund.delayed_withdrawal_amount += yocto_near_amount;
+        self.management_fund.delayed_withdrawal_account_registry.insert(
+            &account_id,
+            &DelayedWithdrawalInfo {
+                yocto_near_amount,
+                started_epoch_height: env::epoch_height()
+            }
+        );
 
-// Не удалять аккаунт, если сняли в ноль, но это ревардс-ресиверы
-        todo!();
+        yocto_token_balance -= yocto_token_amount;
+        if yocto_token_balance > 0
+            || account_id == self.rewards_receiver_account_id
+            || account_id == self.everstake_rewards_receiver_account_id  {
+            self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
+        } else {
+            if let None = self.fungible_token.token_account_registry.remove(&account_id) {
+                return Err(BaseError::Logic);
+            }
+            self.fungible_token.token_accounts_quantity -= 1;
+
+            yocto_near_refundable_deposit += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_token_account)?;
+        }
+
+        self.fungible_token.total_supply -= yocto_token_amount;
+
+        if yocto_near_refundable_deposit > 0 {
+            Promise::new(account_id)
+                .transfer(yocto_near_refundable_deposit);
+        }
+
+        Ok(())
     }
 
     fn internal_add_validator(
@@ -363,7 +407,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating_node.current_delayed_unstake_validator_group.set_next();
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch = 0;
         self.current_epoch_height = env::epoch_height();
-        self.increase_total_rewards_from_validators_yocto_near_amount(self.previous_epoch_rewards_from_validators_yocto_near_amount)?;
+        self.total_rewards_from_validators_yocto_near_amount += self.previous_epoch_rewards_from_validators_yocto_near_amount;
         self.previous_epoch_rewards_from_validators_yocto_near_amount = 0;
 
         if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
@@ -616,20 +660,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    fn increase_total_rewards_from_validators_yocto_near_amount(&mut self, yocto_near_amount: Balance) -> Result<(), BaseError> {
-        self.total_rewards_from_validators_yocto_near_amount = match self.total_rewards_from_validators_yocto_near_amount
-            .checked_add(yocto_near_amount) {
-            Some(total_rewards_from_validators_yocto_near_amount_) => {
-                total_rewards_from_validators_yocto_near_amount_
-            }
-            None => {
-                return Err(BaseError::CalculationOwerflow);
-            }
-        };
-
-        Ok(())
-    }
-
     fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Result<Balance, BaseError> {
         match Balance::from(quantity_of_bytes).checked_mul(env::storage_byte_cost()) {
             Some(value) => {
@@ -686,14 +716,10 @@ impl StakePool {
     }
 
     /// Delayed unstake process.
-    pub fn delayed_withdraw(&mut self, yocto_token_amount: U128) -> Promise {
-        match self.internal_delayed_withdraw(yocto_token_amount.into()) {
-            Ok(promise) => {
-                promise
-            }
-            Err(error) => {
-                env::panic_str(format!("{}", error).as_str());
-            }
+    #[payable]
+    pub fn delayed_withdraw(&mut self, yocto_token_amount: U128) {
+        if let Err(error) = self.internal_delayed_withdraw(yocto_token_amount.into()) {               // TODO TODO ЕСЛИ при distribute_available_for_staking_balance уже распределено, то здесь сразу распределеям на случайный валидатор из текущей группы
+            env::panic_str(format!("{}", error).as_str());
         }
     }
 
@@ -971,7 +997,6 @@ impl StakePool {
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
                 self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;
 
-                self.management_fund.staked_balance += staking_rewards_yocto_near_amount;
                 self.previous_epoch_rewards_from_validators_yocto_near_amount += staking_rewards_yocto_near_amount;
 
                 (true, env::epoch_height())

@@ -11,6 +11,7 @@ pub struct ManagementFund {
     pub available_for_staking_balance: Balance,
     pub staked_balance: Balance,
     pub delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
+    pub delayed_withdrawal_amount: Balance,
     pub is_distributed_on_validators_in_current_epoch: bool,
     /// In bytes.
     pub storage_usage_per_delayed_withdrawal_account: StorageUsage,
@@ -23,6 +24,7 @@ impl ManagementFund {
                 available_for_staking_balance: 0,
                 staked_balance: 0,
                 delayed_withdrawal_account_registry: Self::initialize_delayed_withdrawal_account_registry(),
+                delayed_withdrawal_amount: 0,
                 is_distributed_on_validators_in_current_epoch: false,
                 storage_usage_per_delayed_withdrawal_account: Self::calculate_storage_usage_per_additional_delayed_withdrawal_account()?
             }
