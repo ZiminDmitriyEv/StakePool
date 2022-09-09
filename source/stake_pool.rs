@@ -482,6 +482,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
+    fn internal_confirm_stake_distribution(&mut self) -> Result<(), BaseError> {
+        self.assert_epoch_is_synchronized()?;
+        self.assert_authorized_management_only_by_manager()?;
+
+        self.management_fund.is_distributed_on_validators_in_current_epoch = true;
+
+        Ok(())
+    }
+
     fn internal_is_account_registered(&self, account_id: AccountId) -> bool {
         self.fungible_token.token_account_registry.contains_key(&account_id)
     }
@@ -587,15 +596,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 rewards_fee: self.fee_registry.rewards_fee.clone()
             }
         )
-    }
-
-    fn internal_confirm_stake_distribution(&mut self) -> Result<(), BaseError> {
-        self.assert_epoch_is_synchronized()?;
-        self.assert_authorized_management_only_by_manager()?;
-
-        self.management_fund.is_distributed_on_validators_in_current_epoch = true;
-
-        Ok(())
     }
 
     fn convert_yocto_near_amount_to_yocto_token_amount(&self, yocto_near_amount: Balance) -> Result<Balance, BaseError> {
@@ -798,14 +798,14 @@ impl StakePool {
         }
     }
 
-    pub fn is_account_registered(&self, account_id: AccountId) -> bool {
-        self.internal_is_account_registered(account_id)
-    }
-
     pub fn confirm_stake_distribution(&mut self) {
         if let Err(error) = self.internal_confirm_stake_distribution() {
             env::panic_str(format!("{}", error).as_str());
         }
+    }
+
+    pub fn is_account_registered(&self, account_id: AccountId) -> bool {
+        self.internal_is_account_registered(account_id)
     }
 
     pub fn get_total_token_supply(&self) -> U128 {
