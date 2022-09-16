@@ -1,6 +1,6 @@
 pub(crate) mod aggregated_information;
 pub(crate) mod base_error;
-pub(crate) mod delayed_unstake_validator_group;
+pub(crate) mod delayed_withdrawal_validator_group;
 pub(crate) mod delayed_withdrawal_info;
 pub(crate) mod fee_registry;
 pub(crate) mod fee;
@@ -13,6 +13,7 @@ pub(crate) mod validating_node;
 pub(crate) mod validator_info_dto;
 pub(crate) mod validator_info;
 pub(crate) mod validator_staking_contract_version;
+pub(crate) mod validator_unstake_info;
 pub(crate) mod xcc_staking_pool;
 
 

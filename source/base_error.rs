@@ -29,11 +29,14 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     ValidatorAccountsZeroQuantity,
     InsufficientAvailableForStakingBalance,
     InsufficientStakedBalance,
+    InsufficientDelayedWithdrawalAmount,
     ValidatorInfoAlreadyUpdated,
     SomeValidatorInfoDoesNotUpdated,
     RemovingValidatorWithExistingBalance,
     SameAccountId,
-    DelayedWithdrawalAccountAlreadyRegistered
+    DelayedWithdrawalAccountAlreadyRegistered,
+    InvalidDelayedUnstakeValidatorGroup,
+    DelayedWithdrawalAccountIsNotRegistered
 }
 
 impl Error for BaseError {}     // TODO Выводить сразу в лог с паникойй. Убрать ошибки?
@@ -127,6 +130,15 @@ impl Display for BaseError {
             }
             Self::DelayedWithdrawalAccountAlreadyRegistered => {
                 formatter.write_str("Delayed withdrawal account already registered. Please, wait a few epoch.")?;
+            }
+            Self::InsufficientDelayedWithdrawalAmount => {
+                formatter.write_str("Insufficient delayed withdrawal amount.")?;
+            }
+            Self::InvalidDelayedUnstakeValidatorGroup => {
+                formatter.write_str("Invalid delayed unstake validator group.")?;
+            }
+            Self::DelayedWithdrawalAccountIsNotRegistered => {
+                formatter.write_str("Delayed withdrawal account is not registered.")?;
             }
         }
 
