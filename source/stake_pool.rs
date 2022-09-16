@@ -4,6 +4,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information::AggregatedInformation;
 use super::base_error::BaseError;
+use super::delayed_withdrawal_info_dto::DelayedWithdrawalInfoDto;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::delayed_withdrawal_validator_group::DelayedWithdrawalValidatorGroup;
 use super::fee_registry::FeeRegistry;
@@ -639,6 +640,29 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_info_dto_registry
     }
 
+    fn internal_get_delayed_withdrawal_info_dto(&self) -> Result<Vec<DelayedWithdrawalInfoDto>, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        let mut delayed_withdrawal_info_dto_registry: Vec<DelayedWithdrawalInfoDto> = vec![];
+
+        for (account_id, delayed_withdrawal_info) in self.management_fund.delayed_withdrawal_account_registry.into_iter() {
+            let DelayedWithdrawalInfo {
+                yocto_near_amount,
+                started_epoch_height
+            } = delayed_withdrawal_info;
+
+            delayed_withdrawal_info_dto_registry.push(
+                DelayedWithdrawalInfoDto {
+                    account_id,
+                    yocto_near_amount: yocto_near_amount.into(),
+                    started_epoch_height
+                }
+            );
+        }
+
+        Ok(delayed_withdrawal_info_dto_registry)
+    }
+
     fn internal_get_aggregated_information(&self) -> Result<AggregatedInformation, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
@@ -990,6 +1014,17 @@ impl StakePool {
 
     pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)
         self.internal_get_validator_info_dto()
+    }
+
+    pub fn get_delayed_withdrawal_info_dto(&self) -> Vec<DelayedWithdrawalInfoDto> { // TODO есть Info , есть Information (проблема в имени)
+        match self.internal_get_delayed_withdrawal_info_dto() {
+            Ok(delayed_withdrawal_info_dto) => {
+                delayed_withdrawal_info_dto
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
     }
 
     pub fn get_aggregated_information(&self) -> AggregatedInformation { // TODO есть Info , есть Information (проблема в имени)
