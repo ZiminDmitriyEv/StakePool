@@ -363,7 +363,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
-    // TODO TODO TODO TODO Если есть на валидаторе то, что можно снять, трансферим себе, затем делаем снова декриз -- во время апдейта
 
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientNearDeposit);
@@ -409,6 +408,22 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
+    fn internal_take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        // self.assert_epoch_is_desynchronized()?;
+        // self.assert_authorized_management_only_by_manager()?;
+
+        // match self.validating_node.validator_account_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
+        //     Some(validator_info) => {
+        //         // if validator_info.
+        //     }
+        //     None => {
+        //         return Err(BaseError::ValidatorAccountIsNotRegistered);
+        //     }
+        // }
+
+        todo!();
+    }
+
     fn internal_update_validator_info(      // TODO TODO TODO Что делать, если в новой эпохе часть обновилась, и уже еще раз наступила новая эпоха, и теперь то, что осталось, обновились. То есть, рассинхронизация состояния.
         &mut self, validator_account_id: AccountId
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
@@ -425,7 +440,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                             return Ok(
                                 ext_staking_pool::ext(validator_account_id.clone())
                                     // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
-                                    .get_account_total_balance(env::current_account_id())
+                                    .get_account_staked_balance(env::current_account_id())
                                     .then(
                                         Self::ext(env::current_account_id())
                                             .update_validator_info_callback(&validator_account_id, current_epoch_height)
@@ -854,6 +869,19 @@ impl StakePool {
         }
     }
 
+    pub fn take_unstaked_balance(
+        &mut self, validator_account_id: AccountId
+    ) -> Promise {
+        match self.internal_take_unstaked_balance(validator_account_id) {
+            Ok(promise) => {
+                promise
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
+        }
+    }
+
     pub fn update_validator_info(
         &mut self, validator_account_id: AccountId
     ) -> Promise {
@@ -1126,13 +1154,13 @@ impl StakePool {
                 match validator_info.validator_unstake_info {
                     Some(ref mut validator_unstake_info) => {
                         validator_unstake_info.yocto_near_amount += yocto_near_amount;
-                        validator_unstake_info.epoch_to_withdraw = epoch_to_withdraw;
+                        validator_unstake_info.epoch_to_take_unstaked_balance = epoch_to_withdraw;
                     }
                     None => {
                         validator_info.validator_unstake_info = Some(
                             ValidatorUnstakeInfo {
                                 yocto_near_amount,
-                                epoch_to_withdraw
+                                epoch_to_take_unstaked_balance
                             }
                         )
                     }
