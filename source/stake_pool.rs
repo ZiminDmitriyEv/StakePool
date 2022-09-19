@@ -226,11 +226,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.management_fund.staked_balance -= yocto_near_amount;
-        self.management_fund.delayed_withdrawal_amount += yocto_near_amount;
         self.management_fund.delayed_withdrawal_account_registry.insert(
             &account_id,
             &DelayedWithdrawalInfo {
-                yocto_near_amount,
+                requested_yocto_near_amount: yocto_near_amount,
+                received_yocto_near_amount: 0,
                 started_epoch_height: env::epoch_height()
             }
         );
@@ -368,13 +368,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientNearDeposit);
         }
-        if yocto_near_amount > self.management_fund.delayed_withdrawal_amount {
-            return Err(BaseError::InsufficientDelayedWithdrawalAmount);
-        }
 
         match self.management_fund.delayed_withdrawal_account_registry.get(&delayed_withdrawal_account_id) {
             Some(delayed_withdrawal_info) => {
-                if yocto_near_amount > delayed_withdrawal_info.yocto_near_amount {
+                if (yocto_near_amount + delayed_withdrawal_info.received_yocto_near_amount) > delayed_withdrawal_info.requested_yocto_near_amount {
                     return Err(BaseError::InsufficientDelayedWithdrawalAmount);
                 }
             }
@@ -619,7 +616,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         for (account_id, validator_info) in self.validating_node.validator_account_registry.into_iter() {
             let ValidatorInfo {
-                delayed_withdrawal_validator_group: _,
+                delayed_withdrawal_validator_group,
                 staking_contract_version: _,
                 validator_unstake_info: _,
                 staked_balance,
@@ -630,6 +627,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             validator_info_dto_registry.push(
                 ValidatorInfoDto {
                     account_id,
+                    delayed_withdrawal_validator_group,
                     staked_balance: staked_balance.into(),
                     last_update_info_epoch_height,
                     last_stake_increasing_epoch_height
@@ -647,14 +645,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         for (account_id, delayed_withdrawal_info) in self.management_fund.delayed_withdrawal_account_registry.into_iter() {
             let DelayedWithdrawalInfo {
-                yocto_near_amount,
+                requested_yocto_near_amount,
+                received_yocto_near_amount,
                 started_epoch_height
             } = delayed_withdrawal_info;
 
             delayed_withdrawal_info_dto_registry.push(
                 DelayedWithdrawalInfoDto {
                     account_id,
-                    yocto_near_amount: yocto_near_amount.into(),
+                    requested_yocto_near_amount: requested_yocto_near_amount.into(),
+                    received_yocto_near_amount: received_yocto_near_amount.into(),
                     started_epoch_height
                 }
             );
@@ -1119,7 +1119,7 @@ impl StakePool {
                 let epoch_to_withdraw = env::epoch_height() + 4;
 
                 let mut delayed_withdrawal_info = self.management_fund.delayed_withdrawal_account_registry.get(delayed_withdrawal_account_id).unwrap(); // TODO передать объект сразу
-                delayed_withdrawal_info.yocto_near_amount -= yocto_near_amount;
+                delayed_withdrawal_info.received_yocto_near_amount += yocto_near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap(); // TODO передать объект
                 validator_info.staked_balance -= yocto_near_amount;
@@ -1139,7 +1139,6 @@ impl StakePool {
                 }
 
                 self.management_fund.delayed_withdrawal_account_registry.insert(delayed_withdrawal_account_id, &delayed_withdrawal_info);
-                self.management_fund.delayed_withdrawal_amount -= yocto_near_amount;
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
 
                 true

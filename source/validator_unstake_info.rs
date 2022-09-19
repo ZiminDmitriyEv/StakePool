@@ -1,4 +1,4 @@
-use near_sdk::{env, EpochHeight, Balance};
+use near_sdk::{EpochHeight, Balance};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(BorshDeserialize, BorshSerialize)]
