@@ -3,7 +3,6 @@ use near_sdk::{env, StorageUsage, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedMap;
 use super::base_error::BaseError;
-use super::delayed_withdrawal_validator_group::DelayedWithdrawalValidatorGroup;
 use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 use super::validator_info::ValidatorInfo;
@@ -11,8 +10,6 @@ use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
-    /// Must be changed each epoch to the next value.
-    pub current_delayed_withdrawal_validator_group: DelayedWithdrawalValidatorGroup,
     pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
     pub validator_accounts_quantity: u64,
     pub validator_accounts_maximum_quantity: Option<u64>,
@@ -28,7 +25,6 @@ impl ValidatingNode {
     pub fn new(validators_maximum_quantity: Option<u64>) -> Result<Self, BaseError> {
         Ok(
             Self {
-                current_delayed_withdrawal_validator_group: DelayedWithdrawalValidatorGroup::First,
                 validator_account_registry: Self::initialize_validator_account_registry(),
                 validator_accounts_quantity: 0,
                 validator_accounts_maximum_quantity: validators_maximum_quantity,
@@ -46,7 +42,7 @@ impl ValidatingNode {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         validator_account_registry.insert(
-            &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic, DelayedWithdrawalValidatorGroup::First)
+            &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic)
         );
 
         if env::storage_usage() < initial_storage_usage {

@@ -8,9 +8,10 @@ use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ManagementFund {
-    pub available_for_staking_balance: Balance,
+    pub unstaked_balance: Balance,
     pub staked_balance: Balance,
     pub delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
+    pub delayed_withdrawal_balance: Balance,
     pub is_distributed_on_validators_in_current_epoch: bool,
     /// In bytes.
     pub storage_usage_per_delayed_withdrawal_account: StorageUsage,  // TODO Preferred_validator, класть рна него, если is_distributed_on_validators_in_current_epoch при депозите
@@ -20,9 +21,10 @@ impl ManagementFund {
     pub fn new() -> Result<Self, BaseError> {
         Ok(
             Self {
-                available_for_staking_balance: 0,
+                unstaked_balance: 0,
                 staked_balance: 0,
                 delayed_withdrawal_account_registry: Self::initialize_delayed_withdrawal_account_registry(),
+                delayed_withdrawal_balance: 0,
                 is_distributed_on_validators_in_current_epoch: false,
                 storage_usage_per_delayed_withdrawal_account: Self::calculate_storage_usage_per_additional_delayed_withdrawal_account()?
             }
@@ -30,7 +32,7 @@ impl ManagementFund {
     }
 
     pub fn get_management_fund_amount(&self) -> Balance {
-        self.available_for_staking_balance + self.staked_balance
+        self.unstaked_balance + self.staked_balance
     }
 
     fn calculate_storage_usage_per_additional_delayed_withdrawal_account() -> Result<StorageUsage, BaseError> {

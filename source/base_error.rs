@@ -36,7 +36,11 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     SameAccountId,
     DelayedWithdrawalAccountAlreadyRegistered,
     InvalidDelayedUnstakeValidatorGroup,
-    DelayedWithdrawalAccountIsNotRegistered
+    DelayedWithdrawalAccountIsNotRegistered,
+    NotRightEpoch,
+    InsufficientUnstakedBalanceOnValidator,
+    ValidatorInfoShouldNotBeUpdated,
+    BadEpoch
 }
 
 impl Error for BaseError {}     // TODO Выводить сразу в лог с паникойй. Убрать ошибки?
@@ -139,6 +143,18 @@ impl Display for BaseError {
             }
             Self::DelayedWithdrawalAccountIsNotRegistered => {
                 formatter.write_str("Delayed withdrawal account is not registered.")?;
+            }
+            Self::NotRightEpoch => {
+                formatter.write_str("Delayed withdrawal account is not registered.")?;
+            }
+            Self::InsufficientUnstakedBalanceOnValidator => {
+                formatter.write_str("todo.")?;
+            }
+            Self::ValidatorInfoShouldNotBeUpdated => {
+                formatter.write_str("todo.")?;
+            }
+            Self::BadEpoch => {
+                formatter.write_str("todo.")?;
             }
         }
 

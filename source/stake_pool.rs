@@ -6,7 +6,7 @@ use super::aggregated_information::AggregatedInformation;
 use super::base_error::BaseError;
 use super::delayed_withdrawal_info_dto::DelayedWithdrawalInfoDto;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
-use super::delayed_withdrawal_validator_group::DelayedWithdrawalValidatorGroup;
+use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
@@ -15,7 +15,6 @@ use super::validating_node::ValidatingNode;
 use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
-use super::validator_unstake_info::ValidatorUnstakeInfo;
 use super::xcc_staking_pool::ext_staking_pool;
 use uint::construct_uint;
 
@@ -125,7 +124,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         yocto_token_balance += yocto_token_amount;
 
-        self.management_fund.available_for_staking_balance += yocto_near_amount;
+        self.management_fund.unstaked_balance += yocto_near_amount;
         self.fungible_token.total_supply += yocto_token_amount;
         self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
 
@@ -155,10 +154,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if yocto_near_amount > self.management_fund.available_for_staking_balance {
+        if yocto_near_amount > self.management_fund.unstaked_balance {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
-        self.management_fund.available_for_staking_balance -= yocto_near_amount;
+        self.management_fund.unstaked_balance -= yocto_near_amount;
 
         yocto_token_balance -= yocto_token_amount;
         if yocto_token_balance > 0
@@ -259,11 +258,40 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
+    fn internal_take_delayed_withdrawal(&mut self, delayed_withdrawal_account_id: AccountId) -> Result<Promise, BaseError> {
+        self.assert_epoch_is_synchronized()?;
+
+        match self.management_fund.delayed_withdrawal_account_registry.remove(&delayed_withdrawal_account_id) {
+            Some(delayed_withdrawal_info) => {
+                if delayed_withdrawal_info.requested_yocto_near_amount != delayed_withdrawal_info.received_yocto_near_amount {
+                    return Err(BaseError::Logic);
+                }
+                if (self.current_epoch_height - delayed_withdrawal_info.started_epoch_height) < EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL {
+                    return Err(BaseError::BadEpoch);
+                }
+                if delayed_withdrawal_info.received_yocto_near_amount > self.management_fund.delayed_withdrawal_balance {
+                    return Err(BaseError::Logic);
+                }
+
+                self.management_fund.delayed_withdrawal_balance -= delayed_withdrawal_info.received_yocto_near_amount;
+
+                let yocto_near_amount = delayed_withdrawal_info.received_yocto_near_amount + Self::calculate_storage_staking_price(self.management_fund.storage_usage_per_delayed_withdrawal_account)?;
+
+                Ok(
+                    Promise::new(env::predecessor_account_id())
+                        .transfer(yocto_near_amount)
+                )
+            }
+            None => {
+                return Err(BaseError::DelayedWithdrawalAccountIsNotRegistered);
+            }
+        }
+    }
+
     fn internal_add_validator(
         &mut self,
         validator_account_id: AccountId,
         validator_staking_contract_version: ValidatorStakingContractVersion,
-        delayed_withdrawal_validator_group: DelayedWithdrawalValidatorGroup
     ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
@@ -280,7 +308,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         if let Some(_) = self.validating_node.validator_account_registry.insert(
-            &validator_account_id, &ValidatorInfo::new(validator_staking_contract_version, delayed_withdrawal_validator_group)
+            &validator_account_id, &ValidatorInfo::new(validator_staking_contract_version)
         ) {
             return Err(BaseError::ValidatorAccountIsAlreadyRegistered);
         }
@@ -314,9 +342,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating_node.validator_accounts_quantity -= 1;
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch -= 1;    // TODO  вот это точно ли нужно относительно internal_add_validator
 
+        let yocto_near_amount = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_validator_account)?;
+
         Ok(
             Promise::new(env::predecessor_account_id())
-                .transfer(Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_validator_account)?)
+                .transfer(yocto_near_amount)
         )
     }
 
@@ -326,8 +356,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        if self.management_fund.available_for_staking_balance== 0
-            || !(1..=self.management_fund.available_for_staking_balance).contains(&yocto_near_amount) {
+        if self.management_fund.unstaked_balance== 0
+            || !(1..=self.management_fund.unstaked_balance).contains(&yocto_near_amount) {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
@@ -364,6 +394,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
+        if self.current_epoch_height % 4 != 0  {
+            return Err(BaseError::NotRightEpoch);
+        }
+
         if yocto_near_amount == 0 {
             return Err(BaseError::InsufficientNearDeposit);
         }
@@ -381,9 +415,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 // TODO проверить анстейкед и стейкед баланс на валидаторах и их запросы отсюда.
         match self.validating_node.validator_account_registry.get(&validator_account_id) {
             Some(validator_info) => {
-                if self.validating_node.current_delayed_withdrawal_validator_group != validator_info.delayed_withdrawal_validator_group {
-                    return Err(BaseError::InvalidDelayedUnstakeValidatorGroup);
-                }
                 if yocto_near_amount > validator_info.staked_balance {
                     return Err(BaseError::InsufficientStakedBalance);
                 }
@@ -409,19 +440,42 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
-        // self.assert_epoch_is_desynchronized()?;
-        // self.assert_authorized_management_only_by_manager()?;
+        self.assert_epoch_is_desynchronized()?;
+        self.assert_authorized_management_only_by_manager()?;
 
-        // match self.validating_node.validator_account_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
-        //     Some(validator_info) => {
-        //         // if validator_info.
-        //     }
-        //     None => {
-        //         return Err(BaseError::ValidatorAccountIsNotRegistered);
-        //     }
-        // }
+        let current_epoch_height = env::epoch_height();
 
-        todo!();
+        if current_epoch_height % 4 != 0  {
+            return Err(BaseError::NotRightEpoch);
+        }
+
+        match self.validating_node.validator_account_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
+            Some(validator_info) => {
+                if validator_info.unstaked_balance == 0 {
+                    return Err(BaseError::InsufficientUnstakedBalanceOnValidator);
+                }
+                if validator_info.last_update_info_epoch_height >= current_epoch_height {
+                    return Err(BaseError::ValidatorInfoShouldNotBeUpdated);
+                }
+
+                match validator_info.staking_contract_version {
+                    ValidatorStakingContractVersion::Classic => {
+                        return Ok(
+                            ext_staking_pool::ext(validator_account_id.clone())
+                                // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                .withdraw(validator_info.unstaked_balance.into())
+                                .then(
+                                    Self::ext(env::current_account_id())
+                                        .take_unstaked_balance_callback(&validator_account_id)
+                                )
+                            );
+                    }
+                }
+            }
+            None => {
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            }
+        }
     }
 
     fn internal_update_validator_info(      // TODO TODO TODO Что делать, если в новой эпохе часть обновилась, и уже еще раз наступила новая эпоха, и теперь то, что осталось, обновились. То есть, рассинхронизация состояния.
@@ -472,7 +526,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.management_fund.staked_balance += self.previous_epoch_rewards_from_validators_yocto_near_amount;
         self.management_fund.is_distributed_on_validators_in_current_epoch = false;
-        self.validating_node.current_delayed_withdrawal_validator_group.set_next();
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch = 0;
         self.current_epoch_height = env::epoch_height();
         self.total_rewards_from_validators_yocto_near_amount += self.previous_epoch_rewards_from_validators_yocto_near_amount;
@@ -598,10 +651,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_available_for_staking_balance(&self) -> Result<Balance, BaseError> {
+    fn internal_get_unstaked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.available_for_staking_balance)
+        Ok(self.management_fund.unstaked_balance)
     }
 
     fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
@@ -631,9 +684,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         for (account_id, validator_info) in self.validating_node.validator_account_registry.into_iter() {
             let ValidatorInfo {
-                delayed_withdrawal_validator_group,
                 staking_contract_version: _,
-                validator_unstake_info: _,
+                unstaked_balance: _,
                 staked_balance,
                 last_update_info_epoch_height,
                 last_stake_increasing_epoch_height
@@ -642,7 +694,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             validator_info_dto_registry.push(
                 ValidatorInfoDto {
                     account_id,
-                    delayed_withdrawal_validator_group,
                     staked_balance: staked_balance.into(),
                     last_update_info_epoch_height,
                     last_stake_increasing_epoch_height
@@ -683,7 +734,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Ok(
             AggregatedInformation {
-                available_for_staking_balance: self.management_fund.available_for_staking_balance.into(),
+                unstaked_balance: self.management_fund.unstaked_balance.into(),
                 staked_balance: self.management_fund.staked_balance.into(),
                 token_total_supply: self.fungible_token.total_supply.into(),
                 token_accounts_quantity: self.fungible_token.token_accounts_quantity,
@@ -813,8 +864,19 @@ impl StakePool {
     /// Delayed unstake process.
     #[payable]
     pub fn delayed_withdraw(&mut self, yocto_token_amount: U128) {
-        if let Err(error) = self.internal_delayed_withdraw(yocto_token_amount.into()) {               // TODO TODO ЕСЛИ при distribute_available_for_staking_balance уже распределено, то здесь сразу распределеям на случайный валидатор из текущей группы
+        if let Err(error) = self.internal_delayed_withdraw(yocto_token_amount.into()) {
             env::panic_str(format!("{}", error).as_str());
+        }
+    }
+
+    pub fn take_delayed_withdrawal(&mut self, delayed_withdrawal_account_id: AccountId) -> Promise {
+        match self.internal_take_delayed_withdrawal(delayed_withdrawal_account_id) {
+            Ok(promise) => {
+                promise
+            }
+            Err(error) => {
+                env::panic_str(format!("{}", error).as_str());
+            }
         }
     }
 
@@ -822,12 +884,9 @@ impl StakePool {
     pub fn add_validator(
         &mut self,
         validator_account_id: AccountId,
-        validator_staking_contract_version: ValidatorStakingContractVersion,
-        delayed_withdrawal_validator_group: DelayedWithdrawalValidatorGroup
+        validator_staking_contract_version: ValidatorStakingContractVersion
     ) {
-        if let Err(error) = self.internal_add_validator(
-            validator_account_id, validator_staking_contract_version, delayed_withdrawal_validator_group
-        ) {
+        if let Err(error) = self.internal_add_validator(validator_account_id, validator_staking_contract_version) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -988,10 +1047,10 @@ impl StakePool {
         }
     }
 
-    pub fn get_available_for_staking_balance(&self) -> U128 {
-        match self.internal_get_available_for_staking_balance() {
-            Ok(available_for_staking_balance) => {
-                available_for_staking_balance.into()
+    pub fn get_unstaked_balance(&self) -> U128 {
+        match self.internal_get_unstaked_balance() {
+            Ok(unstaked_balance) => {
+                unstaked_balance.into()
             }
             Err(error) => {
                 env::panic_str(format!("{}", error).as_str());
@@ -1079,7 +1138,7 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                self.management_fund.available_for_staking_balance -= staked_yocto_near_amount;
+                self.management_fund.unstaked_balance -= staked_yocto_near_amount;
                 self.management_fund.staked_balance += staked_yocto_near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
@@ -1144,29 +1203,38 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                let epoch_to_withdraw = env::epoch_height() + 4;
-
                 let mut delayed_withdrawal_info = self.management_fund.delayed_withdrawal_account_registry.get(delayed_withdrawal_account_id).unwrap(); // TODO передать объект сразу
                 delayed_withdrawal_info.received_yocto_near_amount += yocto_near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap(); // TODO передать объект
                 validator_info.staked_balance -= yocto_near_amount;
-                match validator_info.validator_unstake_info {
-                    Some(ref mut validator_unstake_info) => {
-                        validator_unstake_info.yocto_near_amount += yocto_near_amount;
-                        validator_unstake_info.epoch_to_take_unstaked_balance = epoch_to_withdraw;
-                    }
-                    None => {
-                        validator_info.validator_unstake_info = Some(
-                            ValidatorUnstakeInfo {
-                                yocto_near_amount,
-                                epoch_to_take_unstaked_balance
-                            }
-                        )
-                    }
-                }
+                validator_info.unstaked_balance += yocto_near_amount;
 
                 self.management_fund.delayed_withdrawal_account_registry.insert(delayed_withdrawal_account_id, &delayed_withdrawal_info);
+                self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
+
+                true
+            }
+            _ => {
+                false
+            }
+        }
+    }
+
+    #[private]
+    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: &AccountId) -> bool {            // TODO Может быть, ставить счетчик на количество валиаторов, с которыз нужно снимать стейк, чтобы проверять.
+        if env::promise_results_count() == 0 {
+            env::panic_str("Contract expected a result on the callback.");
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => {
+                let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap(); // TODO передать объект
+
+                self.management_fund.delayed_withdrawal_balance += validator_info.unstaked_balance;
+
+                validator_info.unstaked_balance = 0;
+
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
 
                 true

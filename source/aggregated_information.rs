@@ -6,7 +6,7 @@ use super::fee::Fee;
 #[serde(crate = "near_sdk::serde")]
 pub struct AggregatedInformation {                                         // TODO ВСе ДТО ВЫНЕСТИ В модуль.
     /// YoctoNear amount required for distribution on validators.
-    pub available_for_staking_balance: U128,
+    pub unstaked_balance: U128,
 
     /// YoctoNear amount already distributed on validators.
     pub staked_balance: U128,

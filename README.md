@@ -285,14 +285,14 @@ pub fn get_token_account_balance(
 ) -> U128
 ```
 
-- `get_available_for_staking_balance`
+- `get_unstaked_balance`
 
 Available to the client. `view` method.
 
 Checks quantity of native tokens in staking pool wich is not distributed on validators yet.
 
 ```rust
-pub fn get_available_for_staking_balance(
+pub fn get_unstaked_balance(
     &self
 ) -> U128
 ```
