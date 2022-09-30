@@ -1014,8 +1014,8 @@ impl StakePool {
         }
     }
 
-    pub fn get_yocto_token_amount_from_yocto_near_amount(&self, yocto_near_amount: U128) -> U128 {
-        match self.internal_get_yocto_token_amount_from_yocto_near_amount(yocto_near_amount.into()) {
+    pub fn get_yocto_token_amount_from_yocto_near_amount(&self, yocto_near_amount: Balance) -> U128 {
+        match self.internal_get_yocto_token_amount_from_yocto_near_amount(yocto_near_amount) {
             Ok(yocto_token_amount) => {
                 yocto_token_amount.into()
             }
@@ -1025,8 +1025,8 @@ impl StakePool {
         }
     }
 
-    pub fn get_yocto_near_amount_from_yocto_token_amount(&self, yocto_token_amount: U128) -> U128 {
-        match self.internal_get_yocto_near_amount_from_yocto_token_amount(yocto_token_amount.into()) {
+    pub fn get_yocto_near_amount_from_yocto_token_amount(&self, yocto_token_amount: Balance) -> U128 {
+        match self.internal_get_yocto_near_amount_from_yocto_token_amount(yocto_token_amount) {
             Ok(yocto_near_amount) => {
                 yocto_near_amount.into()
             }
