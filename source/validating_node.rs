@@ -13,6 +13,7 @@ pub struct ValidatingNode {
     pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
     pub validator_accounts_quantity: u64,
     pub validator_accounts_maximum_quantity: Option<u64>,
+    pub preffered_validtor_account: Option<AccountId>,
     pub quantity_of_validators_accounts_updated_in_current_epoch: u64,
     /// In bytes.
     pub storage_usage_per_validator_account: StorageUsage,
@@ -28,6 +29,7 @@ impl ValidatingNode {
                 validator_account_registry: Self::initialize_validator_account_registry(),
                 validator_accounts_quantity: 0,
                 validator_accounts_maximum_quantity: validators_maximum_quantity,
+                preffered_validtor_account: None,
                 quantity_of_validators_accounts_updated_in_current_epoch: 0,
                 storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?
             }

@@ -96,11 +96,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_deposit(&mut self) -> Result<(), BaseError> {       // TODO TODO TODO TODO TODO Нужно ли делать так, чтобы еслм  is_distributed_on_validators_in_current_epoch, то кладем сразу на Префферед валидатор
         self.assert_epoch_is_synchronized()?;
 
-        let account_id = env::predecessor_account_id();
+        let predecessor_account_id = env::predecessor_account_id();
 
         let mut yocto_near_amount = env::attached_deposit();
-        let mut yocto_token_balance: Balance = match self.fungible_token.token_account_registry.get(&account_id) {
-            Some(yocto_token_balance_) => yocto_token_balance_,
+        let (mut yocto_token_balance, is_exist): (Balance, bool) = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
+            Some(yocto_token_balance_) => (yocto_token_balance_, true),
             None => {
                 let storage_staking_price_per_additional_token_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_token_account)?;
                 if yocto_near_amount < storage_staking_price_per_additional_token_account {
@@ -108,9 +108,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 }
                 yocto_near_amount -= storage_staking_price_per_additional_token_account;
 
-                self.fungible_token.token_accounts_quantity += 1;
-
-                0
+                (0, false)
             }
         };
         if yocto_near_amount == 0 {
@@ -124,9 +122,50 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         yocto_token_balance += yocto_token_amount;
 
-        self.management_fund.unstaked_balance += yocto_near_amount;
-        self.fungible_token.total_supply += yocto_token_amount;
-        self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
+        if self.management_fund.is_distributed_on_validators_in_current_epoch
+            && self.validating_node.preffered_validtor_account.is_some() {
+                match self.validating_node.preffered_validtor_account {
+                    Some(ref preffered_validator_account_id) => {
+                        match self.validating_node.validator_account_registry.get(preffered_validator_account_id) {
+                            Some(validator_info) => {
+                                match validator_info.staking_contract_version {
+                                    ValidatorStakingContractVersion::Classic => {
+                                        ext_staking_pool::ext(preffered_validator_account_id.clone())
+                                            .with_attached_deposit(yocto_near_amount)
+                                            // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                            .deposit_and_stake()
+                                            .then(
+                                                Self::ext(env::current_account_id())
+                                                    .deposit_callback(
+                                                        &predecessor_account_id,
+                                                        yocto_token_balance,
+                                                        preffered_validator_account_id,
+                                                        yocto_near_amount,
+                                                        yocto_token_amount,
+                                                        is_exist,
+                                                        env::epoch_height()
+                                                    )
+                                            );
+                                    }
+                                }
+                            }
+                            None => {
+                                return Err(BaseError::Logic);
+                            }
+                        }
+                    }
+                    None => {
+                        return Err(BaseError::Logic);
+                    }
+                }
+        } else {
+            self.management_fund.unstaked_balance += yocto_near_amount;
+            self.fungible_token.total_supply += yocto_token_amount;
+            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &yocto_token_balance);
+            if !is_exist {
+                self.fungible_token.token_accounts_quantity += 1;
+            }
+        }
 
         Ok(())
     }
@@ -134,13 +173,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_instant_withdraw(&mut self, yocto_token_amount: u128) -> Result<Promise, BaseError> {   // TODO проставить процент на снятие!!
         self.assert_epoch_is_synchronized()?;
 
-        let account_id = env::predecessor_account_id();
+        let predecessor_account_id = env::predecessor_account_id();
 
         if yocto_token_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
 
-        let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
+        let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
             Some(yocto_token_balance_) => yocto_token_balance_,
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
@@ -161,11 +200,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         yocto_token_balance -= yocto_token_amount;
         if yocto_token_balance > 0
-            || account_id == self.rewards_receiver_account_id
-            || account_id == self.everstake_rewards_receiver_account_id  {
-            self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
+            || predecessor_account_id == self.rewards_receiver_account_id
+            || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
+            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &yocto_token_balance);
         } else {
-            if let None = self.fungible_token.token_account_registry.remove(&account_id) {
+            if let None = self.fungible_token.token_account_registry.remove(&predecessor_account_id) {
                 return Err(BaseError::Logic);
             }
             self.fungible_token.token_accounts_quantity -= 1;
@@ -176,7 +215,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fungible_token.total_supply -= yocto_token_amount;
 
         Ok(
-            Promise::new(account_id)
+            Promise::new(predecessor_account_id)
                 .transfer(yocto_near_amount)
         )
     }
@@ -184,9 +223,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_delayed_withdraw(&mut self, yocto_token_amount: u128) -> Result<(), BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        let account_id = env::predecessor_account_id();
+        let predecessor_account_id = env::predecessor_account_id();
 
-        let mut yocto_near_refundable_deposit = match self.management_fund.delayed_withdrawal_account_registry.get(&account_id) {
+        let mut yocto_near_refundable_deposit = match self.management_fund.delayed_withdrawal_account_registry.get(&predecessor_account_id) {
             Some(_) => {
                 return Err(BaseError::DelayedWithdrawalAccountAlreadyRegistered);
             }
@@ -206,7 +245,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Err(BaseError::InsufficientTokenDeposit);
         }
 
-        let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&account_id) {
+        let mut yocto_token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
             Some(yocto_token_balance_) => yocto_token_balance_,
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
@@ -226,7 +265,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.management_fund.staked_balance -= yocto_near_amount;
         self.management_fund.delayed_withdrawal_account_registry.insert(
-            &account_id,
+            &predecessor_account_id,
             &DelayedWithdrawalInfo {
                 requested_yocto_near_amount: yocto_near_amount,
                 received_yocto_near_amount: 0,
@@ -236,11 +275,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         yocto_token_balance -= yocto_token_amount;
         if yocto_token_balance > 0
-            || account_id == self.rewards_receiver_account_id
-            || account_id == self.everstake_rewards_receiver_account_id  {
-            self.fungible_token.token_account_registry.insert(&account_id, &yocto_token_balance);
+            || predecessor_account_id == self.rewards_receiver_account_id
+            || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
+            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &yocto_token_balance);
         } else {
-            if let None = self.fungible_token.token_account_registry.remove(&account_id) {
+            if let None = self.fungible_token.token_account_registry.remove(&predecessor_account_id) {
                 return Err(BaseError::Logic);
             }
             self.fungible_token.token_accounts_quantity -= 1;
@@ -251,7 +290,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fungible_token.total_supply -= yocto_token_amount;
 
         if yocto_near_refundable_deposit > 0 {
-            Promise::new(account_id)
+            Promise::new(predecessor_account_id)
                 .transfer(yocto_near_refundable_deposit);
         }
 
@@ -292,6 +331,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         &mut self,
         validator_account_id: AccountId,
         validator_staking_contract_version: ValidatorStakingContractVersion,
+        is_preferred: bool
     ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
@@ -314,6 +354,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
         self.validating_node.validator_accounts_quantity += 1;
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;     // TODO вот это точно ли нужно
+
+        if is_preferred {
+            self.validating_node.preffered_validtor_account = Some(validator_account_id);
+        }
 
         let yocto_near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if yocto_near_amount > 0 {
@@ -342,6 +386,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating_node.validator_accounts_quantity -= 1;
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch -= 1;    // TODO  вот это точно ли нужно относительно internal_add_validator
 
+        if let Some(ref preffered_validator_account_id) = self.validating_node.preffered_validtor_account {
+            if *preffered_validator_account_id == validator_account_id {
+                self.validating_node.preffered_validtor_account = None;
+            }
+        }
+
         let yocto_near_amount = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_validator_account)?;
 
         Ok(
@@ -356,7 +406,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        if self.management_fund.unstaked_balance== 0
+        if self.management_fund.unstaked_balance == 0
             || !(1..=self.management_fund.unstaked_balance).contains(&yocto_near_amount) {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
@@ -599,6 +649,29 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fee_registry.everstake_rewards_fee = everstake_rewards_fee;
+
+        Ok(())
+    }
+
+    fn internal_change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) -> Result<(), BaseError> {
+        self.assert_epoch_is_synchronized()?;
+        self.assert_authorized_management_only_by_manager()?;
+
+        match validator_account_id {
+            Some(validator_account_id_) => {
+                match self.validating_node.validator_account_registry.get(&validator_account_id_) {
+                    Some(_) => {
+                        self.validating_node.preffered_validtor_account = Some(validator_account_id_);
+                    }
+                    None => {
+                        return Err(BaseError::ValidatorAccountIsNotRegistered);
+                    }
+                }
+            }
+            None => {
+                self.validating_node.preffered_validtor_account = None;
+            }
+        }
 
         Ok(())
     }
@@ -884,9 +957,10 @@ impl StakePool {
     pub fn add_validator(
         &mut self,
         validator_account_id: AccountId,
-        validator_staking_contract_version: ValidatorStakingContractVersion
+        validator_staking_contract_version: ValidatorStakingContractVersion,
+        is_preferred: bool
     ) {
-        if let Err(error) = self.internal_add_validator(validator_account_id, validator_staking_contract_version) {
+        if let Err(error) = self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_preferred) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -974,6 +1048,12 @@ impl StakePool {
 
     pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
         if let Err(error) = self.internal_change_everstake_rewards_fee(everstake_rewards_fee) {
+            env::panic_str(format!("{}", error).as_str());
+        }
+    }
+
+    pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
+        if let Err(error) = self.internal_change_preffered_validator(validator_account_id) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -1242,6 +1322,42 @@ impl StakePool {
             _ => {
                 false
             }
+        }
+    }
+
+    #[private]
+    pub fn deposit_callback(
+        &mut self,
+        predecessor_account_id: &AccountId,
+        yocto_token_balance: Balance,
+        validator_account_id: &AccountId,
+        deposited_yocto_near_amount: Balance,
+        yocto_token_amount: Balance,
+        is_existing_token_account: bool,
+        current_epoch_height: EpochHeight
+    ) {
+        if env::promise_results_count() == 0 {
+            env::panic_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => {
+                self.management_fund.staked_balance += deposited_yocto_near_amount;
+
+                let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
+                validator_info.staked_balance += deposited_yocto_near_amount;
+                validator_info.last_stake_increasing_epoch_height = Some(current_epoch_height);
+                self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
+            }
+            _ => {
+                self.management_fund.unstaked_balance += deposited_yocto_near_amount;
+            }
+        }
+
+        self.fungible_token.total_supply += yocto_token_amount;
+        self.fungible_token.token_account_registry.insert(&predecessor_account_id, &yocto_token_balance);
+        if !is_existing_token_account {
+            self.fungible_token.token_accounts_quantity += 1;
         }
     }
 }
