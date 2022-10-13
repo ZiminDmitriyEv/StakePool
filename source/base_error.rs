@@ -40,7 +40,10 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     NotRightEpoch,
     InsufficientUnstakedBalanceOnValidator,
     ValidatorInfoShouldNotBeUpdated,
-    BadEpoch
+    BadEpoch,
+    InvestorAccountIsAlreadyRegistered,
+    RemovingInvestorWithExistingBalance,
+    InvestorAccountIsNotRegistered
 }
 
 impl Error for BaseError {}     // TODO Выводить сразу в лог с паникойй. Убрать ошибки?
@@ -154,6 +157,15 @@ impl Display for BaseError {
                 formatter.write_str("todo.")?;
             }
             Self::BadEpoch => {
+                formatter.write_str("todo.")?;
+            }
+            Self::InvestorAccountIsAlreadyRegistered => {
+                formatter.write_str("todo.")?;
+            }
+            Self::RemovingInvestorWithExistingBalance => {
+                formatter.write_str("todo.")?;
+            }
+            Self::InvestorAccountIsNotRegistered => {
                 formatter.write_str("todo.")?;
             }
         }

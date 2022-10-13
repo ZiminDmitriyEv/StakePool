@@ -6,7 +6,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[serde(crate = "near_sdk::serde")]
 pub struct DelayedWithdrawalInfoDto {
     pub account_id: AccountId,
-    pub requested_yocto_near_amount: U128,
-    pub received_yocto_near_amount: U128,
+    pub requested_near_amount: U128,
+    pub received_near_amount: U128,
     pub started_epoch_height: EpochHeight
 }

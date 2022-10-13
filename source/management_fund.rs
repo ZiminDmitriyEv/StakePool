@@ -45,8 +45,8 @@ impl ManagementFund {
         delayed_withdrawal_account_registry.insert(
             &account_id,
             &DelayedWithdrawalInfo {
-                requested_yocto_near_amount: 0,
-                received_yocto_near_amount: 0,
+                requested_near_amount: 0,
+                received_near_amount: 0,
                 started_epoch_height: env::epoch_height()
             }
         );

@@ -5,6 +5,8 @@ pub(crate) mod delayed_withdrawal_info;
 pub(crate) mod fee_registry;
 pub(crate) mod fee;
 pub(crate) mod fungible_token_metadata;
+pub(crate) mod fungible_token_registry_dto;
+pub(crate) mod fungible_token_registry;
 pub(crate) mod fungible_token;
 pub(crate) mod management_fund;
 pub mod stake_pool;
