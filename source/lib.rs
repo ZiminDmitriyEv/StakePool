@@ -1,4 +1,4 @@
-pub(crate) mod aggregated_information;
+pub(crate) mod aggregated_information_dto;
 pub(crate) mod base_error;
 pub(crate) mod delayed_withdrawal_info_dto;
 pub(crate) mod delayed_withdrawal_info;

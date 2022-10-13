@@ -3,7 +3,7 @@ use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeigh
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::UnorderedSet;
 use near_sdk::json_types::U128;
-use super::aggregated_information::AggregatedInformation;
+use super::aggregated_information_dto::AggregatedInformationDto;
 use super::base_error::BaseError;
 use super::delayed_withdrawal_info_dto::DelayedWithdrawalInfoDto;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
@@ -108,7 +108,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(stake_pool)
     }
 
-    fn internal_deposit(&mut self) -> Result<(), BaseError> {       // TODO TODO TODO TODO TODO Нужно ли делать так, чтобы еслм  is_distributed_on_validators_in_current_epoch, то кладем сразу на Префферед валидатор
+    fn internal_classic_deposit(&mut self) -> Result<(), BaseError> {       // TODO TODO TODO TODO TODO Нужно ли делать так, чтобы еслм  is_distributed_on_validators_in_current_epoch, то кладем сразу на Префферед валидатор
         self.assert_epoch_is_synchronized()?;
 
         let predecessor_account_id = env::predecessor_account_id();
@@ -157,7 +157,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                             .deposit_and_stake()
                                             .then(
                                                 Self::ext(env::current_account_id())
-                                                    .deposit_callback(
+                                                    .classic_deposit_callback(
                                                         &predecessor_account_id,
                                                         &fungible_token_registry,
                                                         preffered_validator_account_id,
@@ -191,7 +191,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    fn internal_instant_withdraw(&mut self, classic_token_amount: u128) -> Result<Promise, BaseError> {   // TODO проставить процент на снятие!!
+    fn internal_classic_instant_withdraw(&mut self, classic_token_amount: u128) -> Result<Promise, BaseError> {   // TODO проставить процент на снятие!!
         self.assert_epoch_is_synchronized()?;
 
         let predecessor_account_id = env::predecessor_account_id();
@@ -241,7 +241,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_delayed_withdraw(&mut self, classic_token_amount: u128) -> Result<(), BaseError> {
+    fn internal_classic_delayed_withdraw(&mut self, classic_token_amount: u128) -> Result<(), BaseError> {
         self.assert_epoch_is_synchronized()?;
 
         let predecessor_account_id = env::predecessor_account_id();
@@ -395,7 +395,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         match self.validating_node.validator_account_registry.remove(&validator_account_id) {
             Some(validator_info) => {
-                if validator_info.staked_balance > 0 || validator_info.unstaked_balance > 0 {       // TODO  TODO TODO TODO TODO подумать, при каких условиях еще невозможно удалить валидатор.
+                if validator_info.classic_staked_balance > 0
+                    || validator_info.investment_staked_balance > 0
+                    || validator_info.unstaked_balance > 0 {       // TODO  TODO TODO TODO TODO подумать, при каких условиях еще невозможно удалить валидатор.
                     return Err(BaseError::RemovingValidatorWithExistingBalance);
                 }
             }
@@ -421,10 +423,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_add_investor(
-        &mut self,
-        investor_account_id: AccountId
-    ) -> Result<(), BaseError> {
+    fn internal_add_investor(&mut self, investor_account_id: AccountId) -> Result<(), BaseError> {
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -440,7 +439,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let near_amount = env::attached_deposit() - storage_staking_price_per_additional_investor_account;
         if near_amount > 0 {
             Promise::new(env::predecessor_account_id())
-                .transfer(near_amount);   // TODO Нужен ли коллбек?
+                .transfer(near_amount);
         }
 
         Ok(())
@@ -468,8 +467,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         )
     }
 
-    fn internal_increase_validator_stake(
-        &mut self, validator_account_id: AccountId, near_amount: Balance
+    fn internal_increase_validator_classic_stake(
+        &mut self,
+        validator_account_id: AccountId,
+        near_amount: Balance
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
@@ -492,7 +493,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 .deposit_and_stake()
                                 .then(
                                     Self::ext(env::current_account_id())
-                                        .increase_validator_stake_callback(
+                                        .increase_validator_classic_stake_callback(
                                             &validator_account_id, near_amount, env::epoch_height()
                                         )
                                 )
@@ -506,8 +507,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_decrease_validator_stake(
-        &mut self, validator_account_id: AccountId, delayed_withdrawal_account_id: AccountId, near_amount: Balance
+    fn internal_decrease_validator_classic_stake(
+        &mut self,
+        validator_account_id: AccountId,
+        delayed_withdrawal_account_id: AccountId,
+        near_amount: Balance
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
@@ -533,7 +537,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 // TODO проверить анстейкед и стейкед баланс на валидаторах и их запросы отсюда.
         match self.validating_node.validator_account_registry.get(&validator_account_id) {
             Some(validator_info) => {
-                if near_amount > validator_info.staked_balance {
+                if near_amount > validator_info.classic_staked_balance {
                     return Err(BaseError::InsufficientStakedBalance);
                 }
 
@@ -545,7 +549,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 .unstake(near_amount.into())
                                 .then(
                                     Self::ext(env::current_account_id())
-                                        .decrease_validator_stake_callback(&validator_account_id, &delayed_withdrawal_account_id, near_amount)
+                                        .decrease_validator_classic_stake_callback(&validator_account_id, &delayed_withdrawal_account_id, near_amount)
                                 )
                             );
                     }
@@ -807,13 +811,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_unstaked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.classic_unstaked_balance)
+        Ok(self.management_fund.classic_unstaked_balance + self.management_fund.investament_unstaked_balance)
     }
 
     fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.classic_staked_balance)
+        Ok(self.management_fund.classic_staked_balance + self.management_fund.investament_staked_balance)
     }
 
     fn internal_get_management_fund_amount(&self) -> Result<Balance, BaseError> {
@@ -839,15 +843,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             let ValidatorInfo {
                 staking_contract_version: _,
                 unstaked_balance: _,
-                staked_balance,
+                classic_staked_balance,
+                investment_staked_balance: _,
                 last_update_info_epoch_height,
-                last_stake_increasing_epoch_height
+                last_classic_stake_increasing_epoch_height: last_stake_increasing_epoch_height
             } = validator_info;
 
             validator_info_dto_registry.push(
                 ValidatorInfoDto {
                     account_id,
-                    staked_balance: staked_balance.into(),
+                    classic_staked_balance: classic_staked_balance.into(),
                     last_update_info_epoch_height,
                     last_stake_increasing_epoch_height
                 }
@@ -882,13 +887,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(delayed_withdrawal_info_dto_registry)
     }
 
-    fn internal_get_aggregated_information(&self) -> Result<AggregatedInformation, BaseError> {
+    fn internal_get_aggregated_information_dto(&self) -> Result<AggregatedInformationDto, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
         Ok(
-            AggregatedInformation {
-                unstaked_balance: self.management_fund.classic_unstaked_balance.into(),
-                staked_balance: self.management_fund.classic_staked_balance.into(),
+            AggregatedInformationDto {
+                unstaked_balance: (self.management_fund.classic_unstaked_balance + self.management_fund.investament_unstaked_balance).into(),
+                staked_balance: (self.management_fund.classic_staked_balance + self.management_fund.investament_staked_balance).into(),
                 token_total_supply: self.fungible_token.total_supply.into(),
                 token_accounts_quantity: self.fungible_token.token_accounts_quantity,
                 total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
@@ -1014,17 +1019,17 @@ impl StakePool {
         }
     }
 
-    /// Stake process.
+    /// Stake process with receiving of classic part of fungible token.
     #[payable]
-    pub fn deposit(&mut self) {
-        if let Err(error) = self.internal_deposit() {               // TODO TODO ЕСЛИ при distribute_available_for_staking_balance уже распределено, то здесь сразу распределеям на случайный валидатор из текущей группы
+    pub fn classic_deposit(&mut self) {
+        if let Err(error) = self.internal_classic_deposit() {               // TODO TODO ЕСЛИ при distribute_available_for_staking_balance уже распределено, то здесь сразу распределеям на случайный валидатор из текущей группы
             env::panic_str(format!("{}", error).as_str());
         }
     }
 
-    /// Instant unstake process.
-    pub fn instant_withdraw(&mut self, classic_token_amount: U128) -> Promise {
-        match self.internal_instant_withdraw(classic_token_amount.into()) {
+    /// Instant unstake process with sending of classic part of fungible token.
+    pub fn classic_instant_withdraw(&mut self, classic_token_amount: U128) -> Promise {
+        match self.internal_classic_instant_withdraw(classic_token_amount.into()) {
             Ok(promise) => {
                 promise
             }
@@ -1034,10 +1039,10 @@ impl StakePool {
         }
     }
 
-    /// Delayed unstake process.
+    /// Delayed unstake process with sending of classic part of fungible token.
     #[payable]
-    pub fn delayed_withdraw(&mut self, token_amount: U128) {
-        if let Err(error) = self.internal_delayed_withdraw(token_amount.into()) {
+    pub fn classic_delayed_withdraw(&mut self, classic_token_amount: U128) {
+        if let Err(error) = self.internal_classic_delayed_withdraw(classic_token_amount.into()) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -1094,12 +1099,12 @@ impl StakePool {
         }
     }
 
-    pub fn increase_validator_stake(
+    pub fn increase_validator_classic_stake(
         &mut self,
         validator_account_id: AccountId,
         near_amount: Balance
     ) -> Promise {
-        match self.internal_increase_validator_stake(validator_account_id, near_amount) {
+        match self.internal_increase_validator_classic_stake(validator_account_id, near_amount) {
             Ok(promise) => {
                 promise
             }
@@ -1109,13 +1114,13 @@ impl StakePool {
         }
     }
 
-    pub fn decrease_validator_stake(
+    pub fn decrease_validator_classic_stake(
         &mut self,
         validator_account_id: AccountId,
         delayed_withdrawal_account_id: AccountId,
         near_amount: Balance
     ) -> Promise {
-        match self.internal_decrease_validator_stake(validator_account_id, delayed_withdrawal_account_id, near_amount) {
+        match self.internal_decrease_validator_classic_stake(validator_account_id, delayed_withdrawal_account_id, near_amount) {
             Ok(promise) => {
                 promise
             }
@@ -1313,8 +1318,8 @@ impl StakePool {
         }
     }
 
-    pub fn get_aggregated_information(&self) -> AggregatedInformation { // TODO есть Info , есть Information (проблема в имени)
-        match self.internal_get_aggregated_information() {
+    pub fn get_aggregated_information_dto(&self) -> AggregatedInformationDto { // TODO есть Info , есть Information (проблема в имени)
+        match self.internal_get_aggregated_information_dto() {
             Ok(aggregated_information) => {
                 aggregated_information
             }
@@ -1328,8 +1333,11 @@ impl StakePool {
 #[near_bindgen]
 impl StakePool {
     #[private]
-    pub fn increase_validator_stake_callback(
-        &mut self, validator_account_id: &AccountId, staked_near_amount: Balance, current_epoch_height: EpochHeight
+    pub fn increase_validator_classic_stake_callback(
+        &mut self,
+        validator_account_id: &AccountId,
+        near_amount: Balance,
+        current_epoch_height: EpochHeight
     ) -> bool {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
@@ -1337,12 +1345,12 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                self.management_fund.classic_unstaked_balance -= staked_near_amount;
-                self.management_fund.classic_staked_balance += staked_near_amount;
+                self.management_fund.classic_unstaked_balance -= near_amount;
+                self.management_fund.classic_staked_balance += near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
-                validator_info.staked_balance += staked_near_amount;
-                validator_info.last_stake_increasing_epoch_height = Some(current_epoch_height);
+                validator_info.classic_staked_balance += near_amount;
+                validator_info.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
 
                 true
@@ -1356,7 +1364,9 @@ impl StakePool {
     // TODO комментарий написать. Возвращаем и сохраняем епохи в разном состоянии по-разному, чтобы запомнить, что в какой эпохе инициировано по фактту, а в какую выполнен коллбек
     #[private]
     pub fn update_validator_info_callback(
-        &mut self, validator_account_id: &AccountId, current_epoch_height: EpochHeight
+        &mut self,
+        validator_account_id: &AccountId,
+        current_epoch_height: EpochHeight
     ) -> (bool, EpochHeight) {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
@@ -1368,7 +1378,7 @@ impl StakePool {
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap
 
-                let current_staked_balance = validator_info.staked_balance;
+                let current_staked_balance = validator_info.classic_staked_balance + validator_info.investment_staked_balance;
 
                 let staking_rewards_near_amount = if new_staked_balance >= current_staked_balance {
                     new_staked_balance - current_staked_balance
@@ -1377,7 +1387,7 @@ impl StakePool {
                 };
 
                 validator_info.last_update_info_epoch_height = current_epoch_height;
-                validator_info.staked_balance = new_staked_balance;
+                validator_info.classic_staked_balance = new_staked_balance - validator_info.investment_staked_balance;
 
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
                 self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch += 1;
@@ -1393,8 +1403,11 @@ impl StakePool {
     }
 
     #[private]
-    pub fn decrease_validator_stake_callback(
-        &mut self, validator_account_id: &AccountId, delayed_withdrawal_account_id: &AccountId, near_amount: Balance
+    pub fn decrease_validator_classic_stake_callback(
+        &mut self,
+        validator_account_id: &AccountId,
+        delayed_withdrawal_account_id: &AccountId,
+        near_amount: Balance
     ) -> bool {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
@@ -1406,7 +1419,7 @@ impl StakePool {
                 delayed_withdrawal_info.received_near_amount += near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap(); // TODO передать объект
-                validator_info.staked_balance -= near_amount;
+                validator_info.classic_staked_balance -= near_amount;
                 validator_info.unstaked_balance += near_amount;
 
                 self.management_fund.delayed_withdrawal_account_registry.insert(delayed_withdrawal_account_id, &delayed_withdrawal_info);
@@ -1445,7 +1458,7 @@ impl StakePool {
     }
 
     #[private]
-    pub fn deposit_callback(
+    pub fn classic_deposit_callback(
         &mut self,
         predecessor_account_id: &AccountId,
         fungible_token_registry: &FungibleTokenRegistry,
@@ -1464,8 +1477,8 @@ impl StakePool {
                 self.management_fund.classic_staked_balance += near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
-                validator_info.staked_balance += near_amount;
-                validator_info.last_stake_increasing_epoch_height = Some(current_epoch_height);
+                validator_info.classic_staked_balance += near_amount;
+                validator_info.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
             }
             _ => {

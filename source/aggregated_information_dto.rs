@@ -4,7 +4,7 @@ use super::fee::Fee;
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct AggregatedInformation {                                         // TODO ВСе ДТО ВЫНЕСТИ В модуль.
+pub struct AggregatedInformationDto {                                         // TODO ВСе ДТО ВЫНЕСТИ В модуль.
     /// Near amount required for distribution on validators.
     pub unstaked_balance: U128,
 
