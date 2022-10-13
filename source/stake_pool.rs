@@ -180,7 +180,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     }
                 }
         } else {
-            self.management_fund.unstaked_balance += near_amount;
+            self.management_fund.classic_unstaked_balance += near_amount;
             self.fungible_token.total_supply += classic_token_amount;
             self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
             if !is_exist {
@@ -214,10 +214,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if near_amount > self.management_fund.unstaked_balance {
+        if near_amount > self.management_fund.classic_unstaked_balance {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
-        self.management_fund.unstaked_balance -= near_amount;
+        self.management_fund.classic_unstaked_balance -= near_amount;
 
         fungible_token_registry.classic_token_balance -= classic_token_amount;
         if fungible_token_registry.classic_token_balance > 0
@@ -280,11 +280,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if near_amount > self.management_fund.staked_balance {
+        if near_amount > self.management_fund.classic_staked_balance {
             return Err(BaseError::InsufficientStakedBalance);
         }
 
-        self.management_fund.staked_balance -= near_amount;
+        self.management_fund.classic_staked_balance -= near_amount;
         self.management_fund.delayed_withdrawal_account_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawalInfo {
@@ -474,8 +474,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        if self.management_fund.unstaked_balance == 0
-            || !(1..=self.management_fund.unstaked_balance).contains(&near_amount) {
+        if self.management_fund.classic_unstaked_balance == 0
+            || !(1..=self.management_fund.classic_unstaked_balance).contains(&near_amount) {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
@@ -642,7 +642,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             self.previous_epoch_rewards_from_validators_near_amount
         )?;
 
-        self.management_fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
+        self.management_fund.classic_staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
         self.management_fund.is_distributed_on_validators_in_current_epoch = false;
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch = 0;
         self.current_epoch_height = env::epoch_height();
@@ -807,13 +807,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_unstaked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.unstaked_balance)
+        Ok(self.management_fund.classic_unstaked_balance)
     }
 
     fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.staked_balance)
+        Ok(self.management_fund.classic_staked_balance)
     }
 
     fn internal_get_management_fund_amount(&self) -> Result<Balance, BaseError> {
@@ -887,8 +887,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Ok(
             AggregatedInformation {
-                unstaked_balance: self.management_fund.unstaked_balance.into(),
-                staked_balance: self.management_fund.staked_balance.into(),
+                unstaked_balance: self.management_fund.classic_unstaked_balance.into(),
+                staked_balance: self.management_fund.classic_staked_balance.into(),
                 token_total_supply: self.fungible_token.total_supply.into(),
                 token_accounts_quantity: self.fungible_token.token_accounts_quantity,
                 total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
@@ -1337,8 +1337,8 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                self.management_fund.unstaked_balance -= staked_near_amount;
-                self.management_fund.staked_balance += staked_near_amount;
+                self.management_fund.classic_unstaked_balance -= staked_near_amount;
+                self.management_fund.classic_staked_balance += staked_near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
                 validator_info.staked_balance += staked_near_amount;
@@ -1461,7 +1461,7 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                self.management_fund.staked_balance += near_amount;
+                self.management_fund.classic_staked_balance += near_amount;
 
                 let mut validator_info = self.validating_node.validator_account_registry.get(validator_account_id).unwrap();  // TODO unwrap     МОЖНО ПереДАВАТЬ в КОЛЛБЭК этот объектОБЪЕКТ Сразу
                 validator_info.staked_balance += near_amount;
@@ -1469,7 +1469,7 @@ impl StakePool {
                 self.validating_node.validator_account_registry.insert(validator_account_id, &validator_info);
             }
             _ => {
-                self.management_fund.unstaked_balance += near_amount;
+                self.management_fund.classic_unstaked_balance += near_amount;
             }
         }
 
