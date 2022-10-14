@@ -5,7 +5,7 @@ use super::fee::Fee;
 
 #[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct FeeRegistry {
+pub struct FeeRegistry {    // TODO добавить Фии для инстант Анстейк
     pub rewards_fee: Option<Fee>,
     pub everstake_rewards_fee: Option<Fee>
 }
