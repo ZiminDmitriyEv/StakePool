@@ -38,13 +38,9 @@ pub struct StakePool {      // TODO Можно перенести Структу
     management_fund: ManagementFund,
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
     validating_node: ValidatingNode,
-    /// Registry of investors who are allowed to make an investment deposit.
-    investor_account_registry: UnorderedSet<AccountId>,
     current_epoch_height: EpochHeight,
     previous_epoch_rewards_from_validators_near_amount: Balance,       // TODO МОЖет, сделать через ПрошлыйКурс?
     total_rewards_from_validators_near_amount: Balance,       // TODO Все, что связано с ревардс, перенести в структуру?
-    /// In bytes.
-    storage_usage_per_investor_account: StorageUsage
 }
 
 impl StakePool {        // TODO TODO TODO добавить логи к каждой манипуляции с деньгами или event. Интерфейсы
@@ -96,11 +92,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             fungible_token: FungibleToken::new(env::predecessor_account_id())?,
             management_fund: ManagementFund::new()?,
             validating_node: ValidatingNode::new(validators_maximum_quantity)?,
-            investor_account_registry: Self::initialize_investor_account_registry(),
             current_epoch_height: env::epoch_height(),
             previous_epoch_rewards_from_validators_near_amount: 0,
-            total_rewards_from_validators_near_amount: 0,
-            storage_usage_per_investor_account: Self::calculate_storage_usage_per_additional_investor_account()?
+            total_rewards_from_validators_near_amount: 0
         };
         stake_pool.fungible_token.token_account_registry.insert(&rewards_receiver_account_id, &fungible_token_registry);
         stake_pool.fungible_token.token_account_registry.insert(&everstake_rewards_receiver_account_id, &fungible_token_registry);
@@ -197,7 +191,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        if !self.investor_account_registry.contains(&predecessor_account_id) {
+        if !self.validating_node.investor_account_registry.contains(&predecessor_account_id) {
             return Err(BaseError::InvestorAccountIsNotRegistered);
         }
 
@@ -524,12 +518,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        let storage_staking_price_per_additional_investor_account = Self::calculate_storage_staking_price(self.storage_usage_per_investor_account)?;
+        let storage_staking_price_per_additional_investor_account = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_investor_account)?;
         if env::attached_deposit() < storage_staking_price_per_additional_investor_account {
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
 
-        if !self.investor_account_registry.insert(&investor_account_id) {
+        if !self.validating_node.investor_account_registry.insert(&investor_account_id) {
             return Err(BaseError::InvestorAccountIsAlreadyRegistered);
         }
 
@@ -552,11 +546,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
-        if !self.investor_account_registry.remove(&investor_account_id) {
+        if !self.validating_node.investor_account_registry.remove(&investor_account_id) {
             return Err(BaseError::InvestorAccountIsNotRegistered);
         }
 
-        let near_amount = Self::calculate_storage_staking_price(self.storage_usage_per_investor_account)?;
+        let near_amount = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_investor_account)?;
 
         Ok(
             Promise::new(env::predecessor_account_id())
@@ -1070,26 +1064,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 return Err(BaseError::CalculationOwerflow);
             }
         }
-    }
-
-    fn calculate_storage_usage_per_additional_investor_account() -> Result<StorageUsage, BaseError> {
-        let mut investor_account_registry = Self::initialize_investor_account_registry();
-
-        let initial_storage_usage = env::storage_usage();
-
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
-
-        investor_account_registry.insert(&account_id);
-
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
-    }
-
-    fn initialize_investor_account_registry() -> UnorderedSet<AccountId> {
-        UnorderedSet::new(StorageKey::InvestorAccountRegistry)
     }
 }
 
