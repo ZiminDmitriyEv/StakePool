@@ -1,7 +1,6 @@
 use core::convert::Into;
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::UnorderedSet;
 use near_sdk::json_types::U128;
 use super::aggregated_information_dto::AggregatedInformationDto;
 use super::base_error::BaseError;
@@ -13,9 +12,8 @@ use super::fee::Fee;
 use super::fungible_token_registry_dto::FungibleTokenRegistryDto;
 use super::fungible_token_registry::FungibleTokenRegistry;
 use super::fungible_token::FungibleToken;
+use super::investor_info::InvestorInfo;
 use super::management_fund::ManagementFund;
-use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
-use super::storage_key::StorageKey;
 use super::validating_node::ValidatingNode;
 use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
@@ -28,7 +26,7 @@ construct_uint! {
 }
 
 #[near_bindgen]
-#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить. !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить там, где Мэпы и сеты, посмотреть, где нужно !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 pub struct StakePool {      // TODO Можно перенести Структуру в место, где будут все структуры. А Функциональность оставить. Раз я решил делать Публичные поля
     owner_id: AccountId,
     manager_id: AccountId,
@@ -109,6 +107,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let predecessor_account_id = env::predecessor_account_id();
 
         let mut near_amount = env::attached_deposit();
+
         let (mut fungible_token_registry, is_exist): (FungibleTokenRegistry, bool) = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
             Some(fungible_token_registry_) => (fungible_token_registry_, true),
             None => {
@@ -191,11 +190,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        if !self.validating_node.investor_account_registry.contains(&predecessor_account_id) {
-            return Err(BaseError::InvestorAccountIsNotRegistered);
-        }
+        let mut investor_info = match self.validating_node.investor_account_registry.get(&predecessor_account_id) {
+            Some(investor_info_) => investor_info_,
+            None => {
+                return Err(BaseError::InvestorAccountIsNotRegistered);
+            }
+        };
 
         let mut near_amount = env::attached_deposit();
+
         let mut fungible_token_registry: FungibleTokenRegistry = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
             Some(fungible_token_registry_) => fungible_token_registry_,
             None => {
@@ -227,6 +230,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.investment_unstaked_balance += near_amount;
         self.fungible_token.total_supply += investment_token_amount;
         self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
+
+        investor_info.investment_balance += near_amount;
+        self.validating_node.investor_account_registry.insert(&predecessor_account_id, &investor_info);
 
         Ok(())
     }
@@ -523,7 +529,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Err(BaseError::InsufficientNearDepositForStorageStaking);
         }
 
-        if !self.validating_node.investor_account_registry.insert(&investor_account_id) {
+        if let Some(_) = self.validating_node.investor_account_registry.insert(
+            &investor_account_id, &InvestorInfo::new(investor_account_id.clone())?
+        ) {
             return Err(BaseError::InvestorAccountIsAlreadyRegistered);
         }
 
@@ -540,17 +548,23 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
-        if let Some(fungible_token_registry) = self.fungible_token.token_account_registry.get(&investor_account_id) {
-            if fungible_token_registry.investment_token_balance > 0 {
-                return Err(BaseError::RemovingInvestorWithExistingBalance);
+        let mut investor_info = match self.validating_node.investor_account_registry.remove(&investor_account_id) {  // TODO TODO TODO TODO TODO Обратить внимание, что на постоянное количество инвестмент токенов приходится увеличивающееся количество неара, но инвестмент баланс зафиксирован.
+            Some(investor_info_) => investor_info_,
+            None => {
+                return Err(BaseError::InvestorAccountIsNotRegistered);
             }
+        };
+        if investor_info.investment_balance > 0 {
+            return Err(BaseError::RemovingInvestorWithExistingBalance);
         }
 
-        if !self.validating_node.investor_account_registry.remove(&investor_account_id) {
-            return Err(BaseError::InvestorAccountIsNotRegistered);
-        }
+        let storage_usage_per_validator_distribution_accounts = self.validating_node.storage_usage_per_validator_distribution_account
+            * investor_info.validator_distribution_account_registry.len();                                                                   // TODO перемножать безопасно. Нужно ли ?
 
-        let near_amount = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_investor_account)?;
+        let near_amount = Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_investor_account)?
+            + Self::calculate_storage_staking_price(storage_usage_per_validator_distribution_accounts)?;
+
+        investor_info.validator_distribution_account_registry.clear();
 
         Ok(
             Promise::new(env::predecessor_account_id())
@@ -1635,3 +1649,6 @@ impl StakePool {
 
 
 // TODO TODO TODO TODO TODO ВСе коллбеки сделать так, чтоы приходило БорщСериалайзед данные, а не В Джсоне
+
+
+//  TODO TODO TODO ВСе Итераторы на Вью делать через индекс.     https://github.com/NearDeFi/burrowland/blob/0dbfa1803bf26353ffbee2ffd4f494bab23b2756/contract/src/account.rs#L207

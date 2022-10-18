@@ -8,6 +8,7 @@ pub(crate) mod fungible_token_metadata;
 pub(crate) mod fungible_token_registry_dto;
 pub(crate) mod fungible_token_registry;
 pub(crate) mod fungible_token;
+pub(crate) mod investor_info;
 pub(crate) mod management_fund;
 pub mod stake_pool;
 pub(crate) mod storage_key;

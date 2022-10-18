@@ -1,8 +1,9 @@
 use crate::ONE_TERA;
 use near_sdk::{env, StorageUsage, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::{UnorderedMap, UnorderedSet};
+use near_sdk::collections::{UnorderedMap, LookupMap};
 use super::base_error::BaseError;
+use super::investor_info::InvestorInfo;
 use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 use super::validator_info::ValidatorInfo;
@@ -12,7 +13,7 @@ use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 pub struct ValidatingNode {
     pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
     /// Registry of investors who are allowed to make an investment deposit.
-    pub investor_account_registry: UnorderedSet<AccountId>,
+    pub investor_account_registry: LookupMap<AccountId, InvestorInfo>,
     pub validator_accounts_quantity: u64,
     pub validator_accounts_maximum_quantity: Option<u64>,
     pub preffered_validtor_account: Option<AccountId>,
@@ -20,7 +21,9 @@ pub struct ValidatingNode {
     /// In bytes.
     pub storage_usage_per_validator_account: StorageUsage,
     /// In bytes.
-    pub storage_usage_per_investor_account: StorageUsage
+    pub storage_usage_per_investor_account: StorageUsage,
+    /// In bytes.
+    pub storage_usage_per_validator_distribution_account: StorageUsage
 }
 
 impl ValidatingNode {
@@ -37,12 +40,13 @@ impl ValidatingNode {
                 preffered_validtor_account: None,
                 quantity_of_validators_accounts_updated_in_current_epoch: 0,
                 storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?,
-                storage_usage_per_investor_account: Self::calculate_storage_usage_per_additional_investor_account()?
+                storage_usage_per_investor_account: Self::calculate_storage_usage_per_additional_investor_account()?,
+                storage_usage_per_validator_distribution_account: Self::calculate_storage_usage_per_additional_validator_distribution_account()?
             }
         )
     }
 
-    fn calculate_storage_usage_per_additional_validator_account() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_validator_account() -> Result<StorageUsage, BaseError> {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
         let mut validator_account_registry = Self::initialize_validator_account_registry();
 
         let initial_storage_usage = env::storage_usage();
@@ -67,7 +71,23 @@ impl ValidatingNode {
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        investor_account_registry.insert(&account_id);
+        investor_account_registry.insert(&account_id, &InvestorInfo::new(account_id.clone())?);
+
+        if env::storage_usage() < initial_storage_usage {
+            return Err(BaseError::Logic);
+        }
+
+        Ok(env::storage_usage() - initial_storage_usage)
+    }
+
+    fn calculate_storage_usage_per_additional_validator_distribution_account() -> Result<StorageUsage, BaseError> {
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+
+        let mut validator_distribution_account_registry = InvestorInfo::initialize_validator_distribution_account_registry(account_id.clone());
+
+        let initial_storage_usage = env::storage_usage();
+
+        validator_distribution_account_registry.insert(&account_id, &0);
 
         if env::storage_usage() < initial_storage_usage {
             return Err(BaseError::Logic);
@@ -80,7 +100,7 @@ impl ValidatingNode {
         UnorderedMap::new(StorageKey::ValidatorAccountRegistry)
     }
 
-    fn initialize_investor_account_registry() -> UnorderedSet<AccountId> {
-        UnorderedSet::new(StorageKey::InvestorAccountRegistry)
+    fn initialize_investor_account_registry() -> LookupMap<AccountId, InvestorInfo> {
+        LookupMap::new(StorageKey::InvestorAccountRegistry)
     }
 }

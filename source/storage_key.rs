@@ -1,3 +1,4 @@
+use near_sdk::AccountId;
 use near_sdk::borsh::{self, BorshSerialize};
 use near_sdk::BorshStorageKey;
 
@@ -7,7 +8,10 @@ use near_sdk::BorshStorageKey;
 pub enum StorageKey {                               // TODO Придумать, как их назвать. Как назвать LazyOption<UnorderedMap>  - все должны быть разные.
     InvestorAccountRegistry,
     FungibleToken,
-    FungibleTokenMetadata,
+    FungibleTokenMetadata,                 // TODO проверить, что они используются по одному разу
     ValidatorAccountRegistry,
     DelayedWithdrawalAccountRegistry,
+    ValidatorDistributionAccountRegistry {
+        investor_account_id: AccountId
+    }
 }
