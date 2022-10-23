@@ -1,13 +1,15 @@
 use near_sdk::{Balance, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use near_sdk::collections::UnorderedMap;
+use near_sdk::collections::LookupMap;
 use super::storage_key::StorageKey;
 use super::base_error::BaseError;
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct InvestorInfo {
-    pub validator_distribution_account_registry: UnorderedMap<AccountId, Balance>, // При таком Мэпе нужно ограничить количество валидаторов здесь или же писать клиент  // TODO Название. Почему везде в таких случаях пишется _account_. Стоит ли менять?
-    pub investment_balance: Balance,
+pub struct InvestorInfo {       // TODO можно сделать через ЛукапМэп и каутера, так как аккаунт будет удаляться при снятии
+    pub validator_distribution_account_registry: LookupMap<AccountId, Balance>, // При таком Мэпе нужно ограничить количество валидаторов здесь или же писать клиент  // TODO Название. Почему везде в таких случаях пишется _account_. Стоит ли менять?
+    pub validator_distribution_accounts_quantity: u64,
+    pub original_balance: Balance,
+    pub staked_balance: Balance
 }
 
 impl InvestorInfo {
@@ -15,12 +17,14 @@ impl InvestorInfo {
         Ok(
             Self {
                 validator_distribution_account_registry: Self::initialize_validator_distribution_account_registry(investor_account_id),
-                investment_balance: 0
+                validator_distribution_accounts_quantity: 0,
+                original_balance: 0,
+                staked_balance: 0
             }
         )
     }
 
-    pub fn initialize_validator_distribution_account_registry(investor_account_id: AccountId) -> UnorderedMap<AccountId, Balance> {
-        UnorderedMap::new(StorageKey::ValidatorDistributionAccountRegistry { investor_account_id })
+    pub fn initialize_validator_distribution_account_registry(investor_account_id: AccountId) -> LookupMap<AccountId, Balance> {
+        LookupMap::new(StorageKey::ValidatorDistributionAccountRegistry { investor_account_id })
     }
 }
