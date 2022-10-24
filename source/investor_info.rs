@@ -6,10 +6,9 @@ use super::base_error::BaseError;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct InvestorInfo {       // TODO можно сделать через ЛукапМэп и каутера, так как аккаунт будет удаляться при снятии
-    pub validator_distribution_account_registry: LookupMap<AccountId, Balance>, // При таком Мэпе нужно ограничить количество валидаторов здесь или же писать клиент  // TODO Название. Почему везде в таких случаях пишется _account_. Стоит ли менять?
+    pub validator_distribution_account_registry: LookupMap<AccountId, Balance>,     // TODO Название. Почему везде в таких случаях пишется _account_. Стоит ли менять?
     pub validator_distribution_accounts_quantity: u64,
-    pub original_balance: Balance,
-    pub staked_balance: Balance
+    pub staked_balance: Balance     // TODO название
 }
 
 impl InvestorInfo {
@@ -18,7 +17,6 @@ impl InvestorInfo {
             Self {
                 validator_distribution_account_registry: Self::initialize_validator_distribution_account_registry(investor_account_id),
                 validator_distribution_accounts_quantity: 0,
-                original_balance: 0,
                 staked_balance: 0
             }
         )

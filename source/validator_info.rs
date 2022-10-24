@@ -8,7 +8,7 @@ pub struct ValidatorInfo {
     pub classic_staked_balance: Balance,
     pub investment_staked_balance: Balance,
     pub unstaked_balance: Balance, // TODO МОжет быть, для подсчета сторэжСтейкинг нужно класть не None. Как механизм подсчета считает занятое пространстов. То есть, Выделено на Option<U8> - 2 байта, а занято для None - 1 или 2. По идее, все место переменной занято, .
-    pub last_update_info_epoch_height: EpochHeight,
+    pub last_update_info_epoch_height: EpochHeight,     // TODO поменять название
     pub last_classic_stake_increasing_epoch_height: Option<EpochHeight>
 }
 
