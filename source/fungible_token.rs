@@ -3,7 +3,6 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
 use super::base_error::BaseError;
 use super::fungible_token_metadata::FungibleTokenMetadata;
-use super::fungible_token_registry::FungibleTokenRegistry;
 use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 
@@ -11,7 +10,7 @@ use super::storage_key::StorageKey;
 pub struct FungibleToken {
     pub owner_id: AccountId,
     pub total_supply: Balance,
-    pub token_account_registry: LookupMap<AccountId, FungibleTokenRegistry>,
+    pub token_account_registry: LookupMap<AccountId, Balance>,
     pub token_accounts_quantity: u64,
     pub token_metadata: LazyOption<FungibleTokenMetadata>,
         /// In bytes.
@@ -46,10 +45,7 @@ impl FungibleToken {
 
         token_account_registry.insert(
             &account_id,
-            &FungibleTokenRegistry {
-                classic_token_balance: 0,
-                investment_token_balance: 0
-            }
+            &0
         );
 
         if env::storage_usage() < initial_storage_usage {
@@ -59,7 +55,7 @@ impl FungibleToken {
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn initialize_token_account_registry() -> LookupMap<AccountId, FungibleTokenRegistry> {
+    fn initialize_token_account_registry() -> LookupMap<AccountId, Balance> {
         LookupMap::new(StorageKey::FungibleToken)
     }
 

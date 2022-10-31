@@ -9,8 +9,6 @@ use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
-use super::fungible_token_registry_dto::FungibleTokenRegistryDto;
-use super::fungible_token_registry::FungibleTokenRegistry;
 use super::fungible_token::FungibleToken;
 use super::investor_info::InvestorInfo;
 use super::management_fund::ManagementFund;
@@ -76,11 +74,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         };
 
-        let fungible_token_registry = FungibleTokenRegistry {
-            classic_token_balance: 0,
-            investment_token_balance: 0
-        };
-
         let mut stake_pool = Self {
             owner_id: env::predecessor_account_id(),
             manager_id: manager_id_,
@@ -94,12 +87,23 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             previous_epoch_rewards_from_validators_near_amount: 0,
             total_rewards_from_validators_near_amount: 0
         };
-        stake_pool.fungible_token.token_account_registry.insert(&rewards_receiver_account_id, &fungible_token_registry);
-        stake_pool.fungible_token.token_account_registry.insert(&everstake_rewards_receiver_account_id, &fungible_token_registry);
+        stake_pool.fungible_token.token_account_registry.insert(&rewards_receiver_account_id, &0);
+        stake_pool.fungible_token.token_account_registry.insert(&everstake_rewards_receiver_account_id, &0);
         stake_pool.fungible_token.token_accounts_quantity = 2;
 
         Ok(stake_pool)
     }
+
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
+    // TODO Убрать слова classic/investment. Поставиь Проверки на всех вводах-выводах средств в контексте наличия средст инвестирования и покрывания этих средств токенами пула.
 
     fn internal_classic_deposit(&mut self) -> Result<(), BaseError> {
         self.assert_epoch_is_synchronized()?;
@@ -108,8 +112,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let mut near_amount = env::attached_deposit();
 
-        let (mut fungible_token_registry, is_exist): (FungibleTokenRegistry, bool) = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
-            Some(fungible_token_registry_) => (fungible_token_registry_, true),
+        let mut token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => token_balance_,
             None => {
                 let storage_staking_price_per_additional_token_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_token_account)?;
                 if near_amount < storage_staking_price_per_additional_token_account {
@@ -117,13 +121,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 }
                 near_amount -= storage_staking_price_per_additional_token_account;
 
-                (
-                    FungibleTokenRegistry {
-                        classic_token_balance: 0,
-                        investment_token_balance: 0
-                    },
-                    false
-                )
+                0
             }
         };
         if near_amount == 0 {
@@ -170,12 +168,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 }
             }
         } else {
-            fungible_token_registry.classic_token_balance += classic_token_amount;
+            token_balance += classic_token_amount;
 
-            self.management_fund.classic_unstaked_balance += near_amount;
+            self.management_fund.unstaked_balance += near_amount;
             self.fungible_token.total_supply += classic_token_amount;
-            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
-            if !is_exist {
+            if let None = self.fungible_token.token_account_registry.insert(&predecessor_account_id, &token_balance) {
                 self.fungible_token.token_accounts_quantity += 1;
             }
         }
@@ -269,13 +266,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut fungible_token_registry = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
-            Some(fungible_token_registry_) => fungible_token_registry_,
+        let mut token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => token_balance_,
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
             }
         };
-        if fungible_token_registry.classic_token_balance < classic_token_amount {
+        if token_balance < classic_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
 
@@ -283,16 +280,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if near_amount > self.management_fund.classic_unstaked_balance {
+        if near_amount > self.management_fund.unstaked_balance {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
-        self.management_fund.classic_unstaked_balance -= near_amount;
+        self.management_fund.unstaked_balance -= near_amount;
 
-        fungible_token_registry.classic_token_balance -= classic_token_amount;
-        if fungible_token_registry.classic_token_balance > 0
+        token_balance -= classic_token_amount;
+        if token_balance > 0
             || predecessor_account_id == self.rewards_receiver_account_id
             || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
-            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
+            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             if let None = self.fungible_token.token_account_registry.remove(&predecessor_account_id) {
                 return Err(BaseError::Logic);
@@ -335,13 +332,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         };
 
-        let mut fungible_token_registry = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
-            Some(fungible_token_registry_) => fungible_token_registry_,
+        let mut token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => token_balance_,
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
             }
         };
-        if fungible_token_registry.classic_token_balance < classic_token_amount {
+        if token_balance < classic_token_amount {
             return Err(BaseError::InsufficientTokenAccountBalance);
         }
 
@@ -349,11 +346,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
-        if near_amount > self.management_fund.classic_staked_balance {
+        if near_amount > self.management_fund.staked_balance {
             return Err(BaseError::InsufficientStakedBalance);
         }
 
-        self.management_fund.classic_staked_balance -= near_amount;
+        self.management_fund.staked_balance -= near_amount;
         self.management_fund.delayed_withdrawal_account_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawalInfo {
@@ -363,11 +360,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         );
 
-        fungible_token_registry.classic_token_balance -= classic_token_amount;
-        if fungible_token_registry.classic_token_balance > 0
+        token_balance -= classic_token_amount;
+        if token_balance > 0
             || predecessor_account_id == self.rewards_receiver_account_id
             || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
-            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
+            self.fungible_token.token_account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             if let None = self.fungible_token.token_account_registry.remove(&predecessor_account_id) {
                 return Err(BaseError::Logic);
@@ -553,8 +550,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             return Err(BaseError::InsufficientNearAmount);
         }
 
-        if self.management_fund.classic_unstaked_balance == 0
-            || !(1..=self.management_fund.classic_unstaked_balance).contains(&near_amount) {
+        if self.management_fund.unstaked_balance == 0
+            || !(1..=self.management_fund.unstaked_balance).contains(&near_amount) {
             return Err(BaseError::InsufficientAvailableForStakingBalance);
         }
 
@@ -720,7 +717,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             self.previous_epoch_rewards_from_validators_near_amount
         )?;
 
-        self.management_fund.classic_staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
+        self.management_fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
         self.management_fund.is_distributed_on_validators_in_current_epoch = false;
         self.validating_node.quantity_of_validators_accounts_updated_in_current_epoch = 0;
         self.current_epoch_height = env::epoch_height();
@@ -731,11 +728,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             let rewards_fee_classic_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_classic_token_amount);
             if rewards_fee_classic_token_amount != 0 {
                 match self.fungible_token.token_account_registry.get(&self.rewards_receiver_account_id) {
-                    Some(mut fungible_token_registry) => {
-                        fungible_token_registry.classic_token_balance += rewards_fee_classic_token_amount;
+                    Some(mut token_balance) => {
+                        token_balance += rewards_fee_classic_token_amount;
 
                         self.fungible_token.total_supply += rewards_fee_classic_token_amount;
-                        self.fungible_token.token_account_registry.insert(&self.rewards_receiver_account_id, &fungible_token_registry);
+                        self.fungible_token.token_account_registry.insert(&self.rewards_receiver_account_id, &token_balance);
                     }
                     None => {
                         return Err(BaseError::Logic);
@@ -747,11 +744,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 let everstake_rewards_fee_classic_token_amount = everstake_rewards_fee.multiply(rewards_fee_classic_token_amount);
                 if everstake_rewards_fee_classic_token_amount != 0 {
                     match self.fungible_token.token_account_registry.get(&self.everstake_rewards_receiver_account_id) {
-                        Some(mut fungible_token_registry) => {
-                            fungible_token_registry.classic_token_balance += everstake_rewards_fee_classic_token_amount;
+                        Some(mut token_balance) => {
+                            token_balance += everstake_rewards_fee_classic_token_amount;
 
                             self.fungible_token.total_supply += everstake_rewards_fee_classic_token_amount;
-                            self.fungible_token.token_account_registry.insert(&self.everstake_rewards_receiver_account_id, &fungible_token_registry);
+                            self.fungible_token.token_account_registry.insert(&self.everstake_rewards_receiver_account_id, &token_balance);
                         }
                         None => {
                             return Err(BaseError::Logic);
@@ -861,21 +858,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.convert_token_amount_to_near_amount(token_amount)
     }
 
-    fn internal_get_token_account_balance(&self, account_id: AccountId) -> Result<FungibleTokenRegistryDto, BaseError> {
+    fn internal_get_token_account_balance(&self, account_id: AccountId) -> Result<Balance, BaseError> {
         match self.fungible_token.token_account_registry.get(&account_id) {
-            Some(fungible_token_registry) => {
-                let FungibleTokenRegistry {
-                    classic_token_balance,
-                    investment_token_balance
-                } = fungible_token_registry;
-
-                let fungible_token_registry_dto = FungibleTokenRegistryDto {
-                    classic_token_balance: classic_token_balance.into(),
-                    investment_token_balance: investment_token_balance.into()
-                };
-
-                Ok(fungible_token_registry_dto)
-            }
+            Some(token_balance) => Ok(token_balance),
             None => {
                 return Err(BaseError::TokenAccountIsNotRegistered);
             }
@@ -885,13 +870,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_unstaked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.classic_unstaked_balance + self.management_fund.investment_unstaked_balance)
+        Ok(self.management_fund.unstaked_balance)
     }
 
     fn internal_get_staked_balance(&self) -> Result<Balance, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        Ok(self.management_fund.classic_staked_balance + self.management_fund.investment_staked_balance)
+        Ok(self.management_fund.staked_balance)
     }
 
     fn internal_get_management_fund_amount(&self) -> Result<Balance, BaseError> {
@@ -918,17 +903,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 staking_contract_version: _,
                 unstaked_balance: _,
                 classic_staked_balance,
-                investment_staked_balance: _,
+                investment_staked_balance,
                 last_update_info_epoch_height,
-                last_classic_stake_increasing_epoch_height: last_stake_increasing_epoch_height
+                last_classic_stake_increasing_epoch_height
             } = validator_info;
 
             validator_info_dto_registry.push(
                 ValidatorInfoDto {
                     account_id,
-                    classic_staked_balance: classic_staked_balance.into(),
+                    staked_balance: (classic_staked_balance + investment_staked_balance).into(),
                     last_update_info_epoch_height,
-                    last_stake_increasing_epoch_height
+                    last_stake_increasing_epoch_height: last_classic_stake_increasing_epoch_height
                 }
             );
         }
@@ -966,8 +951,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Ok(
             AggregatedInformationDto {
-                unstaked_balance: (self.management_fund.classic_unstaked_balance + self.management_fund.investment_unstaked_balance).into(),
-                staked_balance: (self.management_fund.classic_staked_balance + self.management_fund.investment_staked_balance).into(),
+                unstaked_balance: self.management_fund.unstaked_balance.into(),
+                staked_balance: self.management_fund.staked_balance.into(),
                 token_total_supply: self.fungible_token.total_supply.into(),
                 token_accounts_quantity: self.fungible_token.token_accounts_quantity,
                 total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
@@ -1302,11 +1287,9 @@ impl StakePool {
         }
     }
 
-    pub fn get_token_account_balance(&self, account_id: AccountId) -> FungibleTokenRegistryDto {
+    pub fn get_token_account_balance(&self, account_id: AccountId) -> U128{
         match self.internal_get_token_account_balance(account_id) {
-            Ok(fungible_token_registry_dto) => {
-                fungible_token_registry_dto
-            }
+            Ok(token_balance) => token_balance.into(),
             Err(error) => {
                 env::panic_str(format!("{}", error).as_str());
             }
@@ -1407,8 +1390,8 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                self.management_fund.classic_unstaked_balance -= near_amount;
-                self.management_fund.classic_staked_balance += near_amount;
+                self.management_fund.unstaked_balance -= near_amount;
+                self.management_fund.staked_balance += near_amount;
 
                 let mut validator_info = match self.validating_node.validator_account_registry.get(&validator_account_id) {
                     Some(validator_info_) => validator_info_,
@@ -1568,26 +1551,23 @@ impl StakePool {
                 validator_info.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating_node.validator_account_registry.insert(&validator_account_id, &validator_info);
 
-                self.management_fund.classic_staked_balance += near_amount;
+                self.management_fund.staked_balance += near_amount;
             }
             _ => {
-                self.management_fund.classic_unstaked_balance += near_amount;
+                self.management_fund.unstaked_balance += near_amount;
             }
         }
 
-        let mut fungible_token_registry = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
-            Some(fungible_token_registry_) => fungible_token_registry_,
+        let mut token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => token_balance_,
             None => {
                 self.fungible_token.token_accounts_quantity += 1;
 
-                FungibleTokenRegistry {
-                    classic_token_balance: 0,
-                    investment_token_balance: 0
-                }
+                0
             }
         };
-        fungible_token_registry.classic_token_balance += classic_token_amount;
-        self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
+        token_balance += classic_token_amount;
+        self.fungible_token.token_account_registry.insert(&predecessor_account_id, &token_balance);
         self.fungible_token.total_supply += classic_token_amount;
     }
 
@@ -1635,22 +1615,19 @@ impl StakePool {
                 investor_info.staked_balance += near_amount;
                 self.validating_node.investor_account_registry.insert(&predecessor_account_id, &investor_info);
 
-                let mut fungible_token_registry = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
-                    Some(fungible_token_registry_) => fungible_token_registry_,
+                let mut token_balance = match self.fungible_token.token_account_registry.get(&predecessor_account_id) {
+                    Some(token_balance_) => token_balance_,
                     None => {
                         self.fungible_token.token_accounts_quantity += 1;
 
-                        FungibleTokenRegistry {
-                            classic_token_balance: 0,
-                            investment_token_balance: 0
-                        }
+                        0
                     }
                 };
-                fungible_token_registry.investment_token_balance += investment_token_amount;
-                self.fungible_token.token_account_registry.insert(&predecessor_account_id, &fungible_token_registry);
+                token_balance += investment_token_amount;
+                self.fungible_token.token_account_registry.insert(&predecessor_account_id, &token_balance);
                 self.fungible_token.total_supply += investment_token_amount;
 
-                self.management_fund.investment_staked_balance += near_amount;
+                self.management_fund.staked_balance += near_amount;
 
                 if refundable_near_amount > 0 {
                     Promise::new(predecessor_account_id)

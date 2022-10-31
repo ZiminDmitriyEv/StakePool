@@ -14,7 +14,7 @@ pub struct ValidatingNode {
     pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
     /// Registry of investors who are allowed to make an investment deposit.
     pub investor_account_registry: LookupMap<AccountId, InvestorInfo>,
-    pub validator_accounts_quantity: u64,
+    pub validator_accounts_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
     pub validator_accounts_maximum_quantity: Option<u64>,
     pub preffered_validtor_account: Option<AccountId>,
     pub quantity_of_validators_accounts_updated_in_current_epoch: u64,

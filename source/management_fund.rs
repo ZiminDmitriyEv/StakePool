@@ -8,10 +8,8 @@ use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ManagementFund {
-    pub classic_unstaked_balance: Balance,
-    pub classic_staked_balance: Balance,
-    pub investment_unstaked_balance: Balance,   // TODO Закрыть возможность обмениваться этими токенами и и вывдить в Дапп.
-    pub investment_staked_balance: Balance,     // TODO Закрыть возможность обмениваться этими токенами и и вывдить в Дапп.
+    pub unstaked_balance: Balance,
+    pub staked_balance: Balance,
     pub delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
     pub delayed_withdrawal_balance: Balance,
     pub is_distributed_on_validators_in_current_epoch: bool,
@@ -23,10 +21,8 @@ impl ManagementFund {
     pub fn new() -> Result<Self, BaseError> {
         Ok(
             Self {
-                classic_unstaked_balance: 0,
-                classic_staked_balance: 0,
-                investment_unstaked_balance: 0,
-                investment_staked_balance: 0,
+                unstaked_balance: 0,
+                staked_balance: 0,
                 delayed_withdrawal_account_registry: Self::initialize_delayed_withdrawal_account_registry(),
                 delayed_withdrawal_balance: 0,
                 is_distributed_on_validators_in_current_epoch: false,
@@ -36,10 +32,8 @@ impl ManagementFund {
     }
 
     pub fn get_management_fund_amount(&self) -> Balance {
-        self.classic_unstaked_balance
-        + self.classic_staked_balance
-        + self.investment_unstaked_balance
-        + self.investment_unstaked_balance
+        self.unstaked_balance
+        + self.staked_balance
     }
 
     fn calculate_storage_usage_per_additional_delayed_withdrawal_account() -> Result<StorageUsage, BaseError> {
