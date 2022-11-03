@@ -8,25 +8,25 @@ use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct DelayedWithdrawnFund {
-    pub delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
+    pub account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
     pub delayed_withdrawal_balance: Balance,
     /// In bytes.
-    pub storage_usage_per_delayed_withdrawal_account: StorageUsage,
+    pub storage_usage_per_account: StorageUsage
 }
 
 impl DelayedWithdrawnFund {
     pub fn new() -> Result<Self, BaseError> {
         Ok(
             Self {
-                delayed_withdrawal_account_registry: Self::initialize_delayed_withdrawal_account_registry(),
+                account_registry: Self::initialize_account_registry(),
                 delayed_withdrawal_balance: 0,
-                storage_usage_per_delayed_withdrawal_account: Self::calculate_storage_usage_per_additional_delayed_withdrawal_account()?
+                storage_usage_per_account: Self::calculate_storage_usage_per_additional_account()?
             }
         )
     }
 
-    fn calculate_storage_usage_per_additional_delayed_withdrawal_account() -> Result<StorageUsage, BaseError> {
-        let mut delayed_withdrawal_account_registry = Self::initialize_delayed_withdrawal_account_registry();
+    fn calculate_storage_usage_per_additional_account() -> Result<StorageUsage, BaseError> {
+        let mut delayed_withdrawal_account_registry = Self::initialize_account_registry();
 
         let initial_storage_usage = env::storage_usage();
 
@@ -48,7 +48,7 @@ impl DelayedWithdrawnFund {
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn initialize_delayed_withdrawal_account_registry() -> UnorderedMap<AccountId, DelayedWithdrawalInfo> {
-        UnorderedMap::new(StorageKey::DelayedWithdrawalAccountRegistry)
+    fn initialize_account_registry() -> UnorderedMap<AccountId, DelayedWithdrawalInfo> {
+        UnorderedMap::new(StorageKey::DelayedWithdrawnFund)
     }
 }

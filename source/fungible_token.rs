@@ -10,11 +10,11 @@ use super::storage_key::StorageKey;
 pub struct FungibleToken {
     pub owner_id: AccountId,
     pub total_supply: Balance,
-    pub token_account_registry: LookupMap<AccountId, Balance>,
-    pub token_accounts_quantity: u64,
-    pub token_metadata: LazyOption<FungibleTokenMetadata>,
+    pub account_registry: LookupMap<AccountId, Balance>,
+    pub accounts_quantity: u64,
+    pub metadata: LazyOption<FungibleTokenMetadata>,
         /// In bytes.
-    pub storage_usage_per_token_account: StorageUsage,
+    pub storage_usage_per_account: StorageUsage,
 }
 
 impl FungibleToken {
@@ -28,16 +28,16 @@ impl FungibleToken {
             Self {
                 owner_id,
                 total_supply: 0,
-                token_account_registry: Self::initialize_token_account_registry(),
-                token_accounts_quantity: 0,
-                token_metadata: Self::initialize_fungible_token_metadata(&fungible_token_metadata),
-                storage_usage_per_token_account: Self::calculate_storage_usage_per_additional_token_account()?
+                account_registry: Self::initialize_account_registry(),
+                accounts_quantity: 0,
+                metadata: Self::initialize_metadata(&fungible_token_metadata),
+                storage_usage_per_account: Self::calculate_storage_usage_per_additional_token_account()?
             }
         )
     }
 
     fn calculate_storage_usage_per_additional_token_account() -> Result<StorageUsage, BaseError> {
-        let mut token_account_registry = Self::initialize_token_account_registry();
+        let mut token_account_registry = Self::initialize_account_registry();
 
         let initial_storage_usage = env::storage_usage();
 
@@ -55,11 +55,11 @@ impl FungibleToken {
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn initialize_token_account_registry() -> LookupMap<AccountId, Balance> {
+    fn initialize_account_registry() -> LookupMap<AccountId, Balance> {
         LookupMap::new(StorageKey::FungibleToken)
     }
 
-    fn initialize_fungible_token_metadata(fungible_token_metadata: &FungibleTokenMetadata) -> LazyOption<FungibleTokenMetadata> {
+    fn initialize_metadata(fungible_token_metadata: &FungibleTokenMetadata) -> LazyOption<FungibleTokenMetadata> {
         LazyOption::new(StorageKey::FungibleTokenMetadata, Some(fungible_token_metadata))
     }
 }

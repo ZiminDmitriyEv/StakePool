@@ -6,8 +6,8 @@ use super::base_error::BaseError;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct InvestorInfo {
-    pub validator_distribution_account_registry: LookupMap<AccountId, Balance>,     // TODO Название. Почему везде в таких случаях пишется _account_. Стоит ли менять?
-    pub validator_distribution_accounts_quantity: u64,      // TODO Нужно ли.
+    pub distribution_registry: LookupMap<AccountId, Balance>,
+    pub distributions_quantity: u64,      // TODO Нужно ли.
     pub staked_balance: Balance
 }
 
@@ -15,14 +15,14 @@ impl InvestorInfo {
     pub fn new(investor_account_id: AccountId) -> Result<Self, BaseError> {
         Ok(
             Self {
-                validator_distribution_account_registry: Self::initialize_validator_distribution_account_registry(investor_account_id),
-                validator_distribution_accounts_quantity: 0,
+                distribution_registry: Self::initialize_distribution_registry(investor_account_id),
+                distributions_quantity: 0,
                 staked_balance: 0
             }
         )
     }
 
-    pub fn initialize_validator_distribution_account_registry(investor_account_id: AccountId) -> LookupMap<AccountId, Balance> {
-        LookupMap::new(StorageKey::ValidatorDistributionAccountRegistry { investor_account_id })
+    pub fn initialize_distribution_registry(investor_account_id: AccountId) -> LookupMap<AccountId, Balance> {
+        LookupMap::new(StorageKey::DistributionRegistry { investor_account_id })
     }
 }

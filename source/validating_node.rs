@@ -11,19 +11,19 @@ use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
-    pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
+    pub validator_registry: UnorderedMap<AccountId, ValidatorInfo>,
     /// Registry of Investors who are allowed to make an deposit directly on validator.
-    pub investor_account_registry: LookupMap<AccountId, InvestorInfo>,
-    pub validator_accounts_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
-    pub validator_accounts_maximum_quantity: Option<u64>,
-    pub preffered_validtor_account: Option<AccountId>,
-    pub quantity_of_validators_accounts_updated_in_current_epoch: u64,
+    pub investor_registry: LookupMap<AccountId, InvestorInfo>,
+    pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
+    pub validators_maximum_quantity: Option<u64>,
+    pub preffered_validtor: Option<AccountId>,
+    pub quantity_of_validators_updated_in_current_epoch: u64,
     /// In bytes.
-    pub storage_usage_per_validator_account: StorageUsage,
+    pub storage_usage_per_validator: StorageUsage,
     /// In bytes.
-    pub storage_usage_per_investor_account: StorageUsage,
+    pub storage_usage_per_investor: StorageUsage,
     /// In bytes.
-    pub storage_usage_per_validator_distribution_account: StorageUsage
+    pub storage_usage_per_distribution: StorageUsage
 }
 
 impl ValidatingNode {
@@ -33,21 +33,21 @@ impl ValidatingNode {
     pub fn new(validators_maximum_quantity: Option<u64>) -> Result<Self, BaseError> {
         Ok(
             Self {
-                validator_account_registry: Self::initialize_validator_account_registry(),
-                investor_account_registry: Self::initialize_investor_account_registry(),
-                validator_accounts_quantity: 0,
-                validator_accounts_maximum_quantity: validators_maximum_quantity,
-                preffered_validtor_account: None,
-                quantity_of_validators_accounts_updated_in_current_epoch: 0,
-                storage_usage_per_validator_account: Self::calculate_storage_usage_per_additional_validator_account()?,
-                storage_usage_per_investor_account: Self::calculate_storage_usage_per_additional_investor_account()?,
-                storage_usage_per_validator_distribution_account: Self::calculate_storage_usage_per_additional_validator_distribution_account()?
+                validator_registry: Self::initialize_validator_registry(),
+                investor_registry: Self::initialize_investor_registry(),
+                validators_quantity: 0,
+                validators_maximum_quantity,
+                preffered_validtor: None,
+                quantity_of_validators_updated_in_current_epoch: 0,
+                storage_usage_per_validator: Self::calculate_storage_usage_per_additional_validator()?,
+                storage_usage_per_investor: Self::calculate_storage_usage_per_additional_investor()?,
+                storage_usage_per_distribution: Self::calculate_storage_usage_per_additional_distribution()?
             }
         )
     }
 
-    fn calculate_storage_usage_per_additional_validator_account() -> Result<StorageUsage, BaseError> {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
-        let mut validator_account_registry = Self::initialize_validator_account_registry();
+    fn calculate_storage_usage_per_additional_validator() -> Result<StorageUsage, BaseError> {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
+        let mut validator_account_registry = Self::initialize_validator_registry();
 
         let initial_storage_usage = env::storage_usage();
 
@@ -64,8 +64,8 @@ impl ValidatingNode {
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn calculate_storage_usage_per_additional_investor_account() -> Result<StorageUsage, BaseError> {
-        let mut investor_account_registry = Self::initialize_investor_account_registry();
+    fn calculate_storage_usage_per_additional_investor() -> Result<StorageUsage, BaseError> {
+        let mut investor_account_registry = Self::initialize_investor_registry();
 
         let initial_storage_usage = env::storage_usage();
 
@@ -80,10 +80,10 @@ impl ValidatingNode {
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn calculate_storage_usage_per_additional_validator_distribution_account() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_distribution() -> Result<StorageUsage, BaseError> {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        let mut validator_distribution_account_registry = InvestorInfo::initialize_validator_distribution_account_registry(account_id.clone());
+        let mut validator_distribution_account_registry = InvestorInfo::initialize_distribution_registry(account_id.clone());
 
         let initial_storage_usage = env::storage_usage();
 
@@ -96,11 +96,11 @@ impl ValidatingNode {
         Ok(env::storage_usage() - initial_storage_usage)
     }
 
-    fn initialize_validator_account_registry() -> UnorderedMap<AccountId, ValidatorInfo> {
-        UnorderedMap::new(StorageKey::ValidatorAccountRegistry)
+    fn initialize_validator_registry() -> UnorderedMap<AccountId, ValidatorInfo> {
+        UnorderedMap::new(StorageKey::ValidatorRegistry)
     }
 
-    fn initialize_investor_account_registry() -> LookupMap<AccountId, InvestorInfo> {
-        LookupMap::new(StorageKey::InvestorAccountRegistry)
+    fn initialize_investor_registry() -> LookupMap<AccountId, InvestorInfo> {
+        LookupMap::new(StorageKey::InvestorRegistry)
     }
 }
