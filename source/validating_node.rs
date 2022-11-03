@@ -12,7 +12,7 @@ use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
     pub validator_account_registry: UnorderedMap<AccountId, ValidatorInfo>,
-    /// Registry of investors who are allowed to make an investment deposit.
+    /// Registry of Investors who are allowed to make an deposit directly on validator.
     pub investor_account_registry: LookupMap<AccountId, InvestorInfo>,
     pub validator_accounts_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
     pub validator_accounts_maximum_quantity: Option<u64>,

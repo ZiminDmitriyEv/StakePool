@@ -5,10 +5,10 @@ use super::storage_key::StorageKey;
 use super::base_error::BaseError;
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct InvestorInfo {       // TODO можно сделать через ЛукапМэп и каутера, так как аккаунт будет удаляться при снятии
+pub struct InvestorInfo {
     pub validator_distribution_account_registry: LookupMap<AccountId, Balance>,     // TODO Название. Почему везде в таких случаях пишется _account_. Стоит ли менять?
-    pub validator_distribution_accounts_quantity: u64,
-    pub staked_balance: Balance     // TODO название
+    pub validator_distribution_accounts_quantity: u64,      // TODO Нужно ли.
+    pub staked_balance: Balance
 }
 
 impl InvestorInfo {

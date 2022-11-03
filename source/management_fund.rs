@@ -11,7 +11,7 @@ pub struct ManagementFund {
     pub unstaked_balance: Balance,
     pub staked_balance: Balance,
     pub delayed_withdrawal_account_registry: UnorderedMap<AccountId, DelayedWithdrawalInfo>,
-    pub delayed_withdrawal_balance: Balance,
+    pub delayed_withdrawal_balance: Balance,                                                    // TODO ПЕРЕНАЗВАТЬ В КОНТЕКСТе UNSTAKED_BALANCE. То есть, эта сумма - как анстейкед баланс, но не значится ва определении курса.
     pub is_distributed_on_validators_in_current_epoch: bool,
     /// In bytes.
     pub storage_usage_per_delayed_withdrawal_account: StorageUsage,
