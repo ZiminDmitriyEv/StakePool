@@ -2,6 +2,7 @@ pub(crate) mod aggregated_information_dto;
 pub(crate) mod base_error;
 pub(crate) mod delayed_withdrawal_info_dto;
 pub(crate) mod delayed_withdrawal_info;
+pub(crate) mod delayed_withdrawn_fund;
 pub(crate) mod fee_registry;
 pub(crate) mod fee;
 pub(crate) mod fungible_token_metadata;
