@@ -10,8 +10,9 @@ pub enum StorageKey {                               // TODO Придумать, 
     FungibleToken,
     FungibleTokenMetadata,                 // TODO проверить, что они используются по одному разу
     ValidatorRegistry,
-    DelayedWithdrawnFund,
+    DelayedWithdrawnFund,           // TODO придумать механизм называния. Посмотреть все.
     DistributionRegistry {
         investor_account_id: AccountId
-    }
+    },
+    InvestmentWithdrawalRegisry
 }

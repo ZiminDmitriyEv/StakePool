@@ -48,7 +48,10 @@ pub enum BaseError {        // TODO описать Контектс там, гд
     RemovingInvestorWithDistribution,
     InsufficientNearAmount,
     InsufficientTokenAccountBalanceForInvesting,
-    InvestorHaveNotGotThisValidator
+    InvestorHaveNotGotThisValidator,
+    NearAmountIsTooBig,
+    InvestmentWithdrawalIsNotRegistered,
+    SomeFundIsNotUnstaked
 }
 
 impl Error for BaseError {}     // TODO Выводить сразу в лог с паникойй. Убрать ошибки?
@@ -186,6 +189,15 @@ impl Display for BaseError {
                 formatter.write_str("todo.")?;
             }
             Self::InvestorHaveNotGotThisValidator => {
+                formatter.write_str("todo.")?;
+            }
+            Self::NearAmountIsTooBig => {
+                formatter.write_str("todo.")?;
+            }
+            Self::InvestmentWithdrawalIsNotRegistered => {
+                formatter.write_str("todo.")?;
+            }
+            Self::SomeFundIsNotUnstaked => {
                 formatter.write_str("todo.")?;
             }
         }

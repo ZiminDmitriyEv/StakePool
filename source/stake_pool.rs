@@ -4,14 +4,15 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information_dto::AggregatedInformationDto;
 use super::base_error::BaseError;
-use super::delayed_withdrawal_info_dto::DelayedWithdrawalInfoDto;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
+use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
 use super::investor_info::InvestorInfo;
 use super::management_fund::ManagementFund;
+use super::stake_decreasing_kind::StakeDecreasingType;
 use super::validating_node::ValidatingNode;
 use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
@@ -104,11 +105,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
             Some(token_balance_) => token_balance_,
             None => {
-                let storage_staking_price_per_additional_token_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account)?;
-                if near_amount < storage_staking_price_per_additional_token_account {
+                let storage_staking_price_per_additional_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account)?;
+                if near_amount < storage_staking_price_per_additional_account {
                     return Err(BaseError::InsufficientNearDepositForStorageStaking);
                 }
-                near_amount -= storage_staking_price_per_additional_token_account;
+                near_amount -= storage_staking_price_per_additional_account;
 
                 0
             }
@@ -243,7 +244,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
-        Ok(())
+        Ok(())          // TODO Вернутт коллбек, который написан выше.
     }
 
     fn internal_instant_withdraw(&mut self, token_amount: Balance) -> Result<Promise, BaseError> {   // TODO проставить процент на снятие!!
@@ -322,6 +323,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             return Err(BaseError::InsufficientTokenDeposit);
         }
+
         if near_amount > self.management_fund.staked_balance {
             return Err(BaseError::InsufficientStakedBalance);
         }
@@ -330,8 +332,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let mut near_refundable_deposit = match self.management_fund.delayed_withdrawn_fund.account_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawalInfo {
-                requested_near_amount: near_amount,
-                received_near_amount: 0,
+                near_amount,
                 started_epoch_height: env::epoch_height()
             }
         ) {
@@ -341,15 +342,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             None => {
                 let near_deposit = env::attached_deposit();
 
-                let storage_staking_price_per_additional_delayed_withdrawal_account =
+                let storage_staking_price_per_additional_delayed_withdrawal =
                     Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account)?;
-                if near_deposit < storage_staking_price_per_additional_delayed_withdrawal_account {
+                if near_deposit < storage_staking_price_per_additional_delayed_withdrawal {
                     return Err(BaseError::InsufficientNearDeposit);
                 }
 
-                near_deposit - storage_staking_price_per_additional_delayed_withdrawal_account
+                near_deposit - storage_staking_price_per_additional_delayed_withdrawal
             }
         };
+        self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
         token_balance -= token_amount;
         if let Some(investor_info) = self.validating_node.investor_registry.get(&predecessor_account_id) {
@@ -378,19 +380,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    // TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-    // TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-    // TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-// TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-// TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-// TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-// TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-// TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-// TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-    // TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-    // TODO СДЕлАТЬ ФИксацию ДЛя Дикриз валидатор стейек того, что это конерктно. Снимаем классик или инветсмент.
-    // TODO вот это написать на обработке ДикризВалидаторСтейк      // investor_staked_balance_on_validator -= near_amount;
-
     fn internal_delayed_withdraw_from_validator(
         &mut self,
         near_amount: Balance,
@@ -401,6 +390,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             return Err(BaseError::InsufficientNearAmount);
         }
+        if near_amount > self.management_fund.staked_balance {
+            return Err(BaseError::InsufficientStakedBalance);
+        }
 
         let validator_info = match self.validating_node.validator_registry.get(&validator_account_id) {
             Some(validator_info_) => validator_info_,
@@ -408,9 +400,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 return Err(BaseError::ValidatorAccountIsNotRegistered);
             }
         };
-        if near_amount > validator_info.investment_staked_balance {
-            return Err(BaseError::InsufficientUnstakedBalanceOnValidator);
-        }
 
         let predecessor_account_id = env::predecessor_account_id();
 
@@ -421,7 +410,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         };
 
-        let investor_staked_balance_on_validator = match investor_info.distribution_registry.get(&validator_account_id) {
+        let mut investor_staked_balance_on_validator = match investor_info.distribution_registry.get(&validator_account_id) {
             Some(staked_balance_) => staked_balance_,
             None => {
                 return Err(BaseError::InvestorHaveNotGotThisValidator);
@@ -429,6 +418,31 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         };
         if near_amount > investor_staked_balance_on_validator {
             return Err(BaseError::InsufficientStakedBalance);
+        }
+
+        let (mut near_refundable_deposit, mut investment_withdrawal_info) =
+            match self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+            Some(investment_withdrawal_info_) => (env::attached_deposit(), investment_withdrawal_info_),
+            None => {
+                let near_deposit = env::attached_deposit();
+
+                let storage_staking_price_per_additional_investment_withdrawal =
+                    Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_investment_withdrawal)?;
+                if near_deposit < storage_staking_price_per_additional_investment_withdrawal {
+                    return Err(BaseError::InsufficientNearDeposit);
+                }
+
+                (
+                    near_deposit - storage_staking_price_per_additional_investment_withdrawal,
+                    InvestmentWithdrawalInfo {
+                        near_amount: 0,
+                        account_id: predecessor_account_id.clone()
+                    }
+                )
+            }
+        };
+        if near_amount > (validator_info.investment_staked_balance - investment_withdrawal_info.near_amount) {
+            return Err(BaseError::InsufficientUnstakedBalanceOnValidator);
         }
 
         let token_amount = self.convert_near_amount_to_token_amount(near_amount)?;
@@ -447,11 +461,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.management_fund.staked_balance -= near_amount;
-        let mut near_refundable_deposit = match self.management_fund.delayed_withdrawn_fund.account_registry.insert(
+        match self.management_fund.delayed_withdrawn_fund.account_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawalInfo {
-                requested_near_amount: near_amount,
-                received_near_amount: 0,
+                near_amount,
                 started_epoch_height: env::epoch_height()
             }
         ) {
@@ -459,28 +472,31 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 return Err(BaseError::DelayedWithdrawalAccountAlreadyRegistered);
             }
             None => {
-                let near_deposit = env::attached_deposit();
-
-                let storage_staking_price_per_additional_delayed_withdrawal_account =
+                let storage_staking_price_per_additional_account =
                     Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account)?;
-                if near_deposit < storage_staking_price_per_additional_delayed_withdrawal_account {
+                if near_refundable_deposit < storage_staking_price_per_additional_account {
                     return Err(BaseError::InsufficientNearDeposit);
                 }
-
-                near_deposit - storage_staking_price_per_additional_delayed_withdrawal_account
+                near_refundable_deposit -= storage_staking_price_per_additional_account;
             }
-        };
+        }
+
+        investment_withdrawal_info.near_amount += near_amount;
+        self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal_info);
+        self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount += near_amount;
 
         if near_amount < investor_staked_balance_on_validator {
+            investor_staked_balance_on_validator -= near_amount;
+
             investor_info.distribution_registry.insert(&validator_account_id, &investor_staked_balance_on_validator);
         } else {
             investor_info.distribution_registry.remove(&validator_account_id);
 
             near_refundable_deposit += Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_distribution)?;
         }
+        self.validating_node.investor_registry.insert(&predecessor_account_id, &investor_info);
 
         token_balance -= token_amount;
-
         if token_balance > 0
             || predecessor_account_id == self.rewards_receiver_account_id
             || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
@@ -544,56 +560,71 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_decrease_validator_stake(
+    fn internal_requested_decrease_validator_stake(
         &mut self,
         validator_account_id: AccountId,
-        delayed_withdrawal_account_id: AccountId,
-        near_amount: Balance
+        near_amount: Balance,
+        stake_decreasing_type: StakeDecreasingType
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
+        Self::assert_epoch_is_right(self.current_epoch_height)?;
 
         if near_amount == 0 {
             return Err(BaseError::InsufficientNearDeposit);
         }
 
-        if self.current_epoch_height % 4 != 0  {
-            return Err(BaseError::NotRightEpoch);
-        }
-
-        match self.management_fund.delayed_withdrawn_fund.account_registry.get(&delayed_withdrawal_account_id) {
-            Some(delayed_withdrawal_info) => {
-                if (near_amount + delayed_withdrawal_info.received_near_amount) > delayed_withdrawal_info.requested_near_amount {
-                    return Err(BaseError::InsufficientDelayedWithdrawalAmount);
-                }
-            }
+        let validator_info = match self.validating_node.validator_registry.get(&validator_account_id) {     // TODO проверить на правильные ли методы идут кроссколы. Взять весб баланс или взять анстейкед баланс или взять стейкед баланс.
+            Some(validator_info_) => validator_info_,
             None => {
-                return Err(BaseError::DelayedWithdrawalAccountIsNotRegistered);
+                return Err(BaseError::ValidatorAccountIsNotRegistered);
             }
-        }
-// TODO проверить на правильные ли методы идут кроссколы. Взять весб баланс или взять анстейкед баланс или взять стейкед баланс.
-        match self.validating_node.validator_registry.get(&validator_account_id) {
-            Some(validator_info) => {
+        };
+        match stake_decreasing_type {
+            StakeDecreasingType::Classic => {
                 if near_amount > validator_info.classic_staked_balance {
                     return Err(BaseError::InsufficientStakedBalance);
                 }
-
-                match validator_info.staking_contract_version {
-                    ValidatorStakingContractVersion::Classic => {
-                        return Ok(
-                            ext_staking_pool::ext(validator_account_id.clone())
-                                // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
-                                .unstake(near_amount.into())
-                                .then(
-                                    Self::ext(env::current_account_id())
-                                        .decrease_validator_stake_callback(validator_account_id, delayed_withdrawal_account_id, near_amount)
-                                )
-                            );
-                    }
+                if near_amount > self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount {
+                    return Err(BaseError::NearAmountIsTooBig);
                 }
             }
-            None => {
-                return Err(BaseError::ValidatorAccountIsNotRegistered);
+            StakeDecreasingType::Investment => {
+                if near_amount > validator_info.investment_staked_balance {
+                    return Err(BaseError::InsufficientStakedBalance);
+                }
+                if near_amount > self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount {
+                    return Err(BaseError::NearAmountIsTooBig);
+                }
+
+                let investment_withdrawal_info = match self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+                    Some(investment_withdrawal_info_) => investment_withdrawal_info_,
+                    None => {
+                        return Err(BaseError::InvestmentWithdrawalIsNotRegistered);
+                    }
+                };
+                if near_amount > investment_withdrawal_info.near_amount {
+                    return Err(BaseError::NearAmountIsTooBig)
+                }
+            }
+        }
+
+        match validator_info.staking_contract_version {
+            ValidatorStakingContractVersion::Classic => {
+                return Ok(
+                    ext_staking_pool::ext(validator_account_id.clone())
+                        // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                        .unstake(near_amount.into())
+                        .then(
+                            Self::ext(env::current_account_id())
+                                .requested_decrease_validator_stake_callback(
+                                    validator_account_id,
+                                    near_amount,
+                                    stake_decreasing_type,
+                                    Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_investment_withdrawal)?
+                                )
+                        )
+                    );
             }
         }
     }
@@ -604,9 +635,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let current_epoch_height = env::epoch_height();
 
-        if current_epoch_height % 4 != 0  {
-            return Err(BaseError::NotRightEpoch);
-        }
+        Self::assert_epoch_is_right(current_epoch_height)?;
 
         match self.validating_node.validator_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
             Some(validator_info) => {
@@ -676,6 +705,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if self.validating_node.quantity_of_validators_updated_in_current_epoch != self.validating_node.validators_quantity {
             return Err(BaseError::SomeValidatorInfoDoesNotUpdated);
         }
+        if self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount > 0
+            || self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount > 0 {
+            return Err(BaseError::SomeFundIsNotUnstaked);
+        }
 
         let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
             self.previous_epoch_rewards_from_validators_near_amount
@@ -686,7 +719,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating_node.quantity_of_validators_updated_in_current_epoch = 0;
         self.current_epoch_height = env::epoch_height();
         self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;
-        self.previous_epoch_rewards_from_validators_near_amount = 0;
+        self.previous_epoch_rewards_from_validators_near_amount = 0;                               // TODO переназвать, Убрать в впомагательные параметры.
 
         if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
             let rewards_fee_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
@@ -725,28 +758,28 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    fn internal_take_delayed_withdrawal(&mut self, delayed_withdrawal_account_id: AccountId) -> Result<Promise, BaseError> {
+    fn internal_take_delayed_withdrawal(&mut self) -> Result<Promise, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
-        match self.management_fund.delayed_withdrawn_fund.account_registry.remove(&delayed_withdrawal_account_id) {
+        let predecessor_account_id = env::predecessor_account_id();
+
+        match self.management_fund.delayed_withdrawn_fund.account_registry.remove(&predecessor_account_id) {
             Some(delayed_withdrawal_info) => {
-                if delayed_withdrawal_info.requested_near_amount != delayed_withdrawal_info.received_near_amount {
+                if delayed_withdrawal_info.near_amount > self.management_fund.delayed_withdrawn_fund.balance
+                    || delayed_withdrawal_info.near_amount == 0 {
                     return Err(BaseError::Logic);
                 }
                 if (self.current_epoch_height - delayed_withdrawal_info.started_epoch_height) < EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL {
                     return Err(BaseError::BadEpoch);
                 }
-                if delayed_withdrawal_info.received_near_amount > self.management_fund.delayed_withdrawn_fund.delayed_withdrawal_balance {
-                    return Err(BaseError::Logic);
-                }
 
-                self.management_fund.delayed_withdrawn_fund.delayed_withdrawal_balance -= delayed_withdrawal_info.received_near_amount;
+                self.management_fund.delayed_withdrawn_fund.balance -= delayed_withdrawal_info.near_amount;
 
-                let near_amount = delayed_withdrawal_info.received_near_amount +
+                let near_amount = delayed_withdrawal_info.near_amount +
                     Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account)?;
 
                 Ok(
-                    Promise::new(env::predecessor_account_id())
+                    Promise::new(predecessor_account_id)
                         .transfer(near_amount)
                 )
             }
@@ -947,7 +980,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
-    fn internal_is_account_registered(&self, account_id: AccountId) -> bool {
+    fn internal_is_token_account_registered(&self, account_id: AccountId) -> bool {
         self.fungible_token.account_registry.contains_key(&account_id)
     }
 
@@ -1040,31 +1073,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_info_dto_registry
     }
 
-    fn internal_get_delayed_withdrawal_info_dto(&self) -> Result<Vec<DelayedWithdrawalInfoDto>, BaseError> {
-        self.assert_epoch_is_synchronized()?;
-
-        let mut delayed_withdrawal_info_dto_registry: Vec<DelayedWithdrawalInfoDto> = vec![];
-
-        for (account_id, delayed_withdrawal_info) in self.management_fund.delayed_withdrawn_fund.account_registry.into_iter() {
-            let DelayedWithdrawalInfo {
-                requested_near_amount,
-                received_near_amount,
-                started_epoch_height
-            } = delayed_withdrawal_info;
-
-            delayed_withdrawal_info_dto_registry.push(
-                DelayedWithdrawalInfoDto {
-                    account_id,
-                    requested_near_amount: requested_near_amount.into(),
-                    received_near_amount: received_near_amount.into(),
-                    started_epoch_height
-                }
-            );
-        }
-
-        Ok(delayed_withdrawal_info_dto_registry)
-    }
-
     fn internal_get_aggregated_information_dto(&self) -> Result<AggregatedInformationDto, BaseError> {
         self.assert_epoch_is_synchronized()?;
 
@@ -1142,6 +1150,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
+    fn assert_epoch_is_right(epoch_height: EpochHeight) -> Result<(), BaseError> {
+        if epoch_height % 4 != 0  {
+            return Err(BaseError::NotRightEpoch);
+        }
+
+        Ok(())
+    }
+
     fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Result<Balance, BaseError> {
         match Balance::from(quantity_of_bytes).checked_mul(env::storage_byte_cost()) {
             Some(value) => {
@@ -1155,7 +1171,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 }
 
 #[near_bindgen]
-impl StakePool {
+impl StakePool {                // TODO в сигнатуре методов вместо Баланс проставить U128.
     #[init]
     pub fn new(
         manager_id: Option<AccountId>,
@@ -1238,13 +1254,14 @@ impl StakePool {
         }
     }
 
-    pub fn decrease_validator_stake(
+    /// Validator stake decreasing process for the needs of delayed withdrawal fund.
+    pub fn requested_decrease_validator_stake(
         &mut self,
         validator_account_id: AccountId,
-        delayed_withdrawal_account_id: AccountId,
-        near_amount: Balance
+        near_amount: Balance,
+        stake_decreasing_type: StakeDecreasingType
     ) -> Promise {
-        match self.internal_decrease_validator_stake(validator_account_id, delayed_withdrawal_account_id, near_amount) {
+        match self.internal_requested_decrease_validator_stake(validator_account_id, near_amount, stake_decreasing_type) {
             Ok(promise) => {
                 promise
             }
@@ -1282,8 +1299,8 @@ impl StakePool {
         }
     }
 
-    pub fn take_delayed_withdrawal(&mut self, delayed_withdrawal_account_id: AccountId) -> Promise {
-        match self.internal_take_delayed_withdrawal(delayed_withdrawal_account_id) {
+    pub fn take_delayed_withdrawal(&mut self) -> Promise {
+        match self.internal_take_delayed_withdrawal() {
             Ok(promise) => {
                 promise
             }
@@ -1364,8 +1381,8 @@ impl StakePool {
         }
     }
 
-    pub fn is_account_registered(&self, account_id: AccountId) -> bool {
-        self.internal_is_account_registered(account_id)
+    pub fn is_token_account_registered(&self, account_id: AccountId) -> bool {
+        self.internal_is_token_account_registered(account_id)
     }
 
     pub fn get_total_token_supply(&self) -> U128 {
@@ -1416,7 +1433,7 @@ impl StakePool {
         }
     }
 
-    pub fn get_token_account_balance(&self, account_id: AccountId) -> U128{
+    pub fn get_token_account_balance(&self, account_id: AccountId) -> U128 {
         match self.internal_get_token_account_balance(account_id) {
             Ok(token_balance) => token_balance.into(),
             Err(error) => {
@@ -1479,17 +1496,6 @@ impl StakePool {
 
     pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)
         self.internal_get_validator_info_dto()
-    }
-
-    pub fn get_delayed_withdrawal_info_dto(&self) -> Vec<DelayedWithdrawalInfoDto> { // TODO есть Info , есть Information (проблема в имени)
-        match self.internal_get_delayed_withdrawal_info_dto() {
-            Ok(delayed_withdrawal_info_dto) => {
-                delayed_withdrawal_info_dto
-            }
-            Err(error) => {
-                env::panic_str(format!("{}", error).as_str());
-            }
-        }
     }
 
     pub fn get_aggregated_information_dto(&self) -> AggregatedInformationDto { // TODO есть Info , есть Information (проблема в имени)
@@ -1656,11 +1662,12 @@ impl StakePool {
     }
 
     #[private]
-    pub fn decrease_validator_stake_callback(       // TODO TODO проверить, что во всех методах, где есть коллбек, нет изменения состояния вне коллбека
+    pub fn requested_decrease_validator_stake_callback(    // TODO TODO TODO Это дикриз для нужнд пользоватпеля, но подойдет ли этот метод, если мы хотим просто сделать дикриз стейка валидатора, с целью перераспределения. Обратить внимание на то, что то, что в ДелайдВитхдровол уже не влияет на курс. TODO TODO TODO написать метод, который снимает для нужд менеджера, при этом дать возможность пользователяи продолжать делать ДелайдАнстейк, даже если мы для нужнд менеджера запросили все средства.!!!!!!!!    // TODO TODO проверить, что во всех методах, где есть коллбек, нет изменения состояния вне коллбека
         &mut self,
         validator_account_id: AccountId,
-        delayed_withdrawal_account_id: AccountId,
-        near_amount: Balance
+        near_amount: Balance,
+        stake_decreasing_type: StakeDecreasingType,
+        refundable_near_amount: Balance
     ) -> bool {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
@@ -1668,22 +1675,41 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                let mut delayed_withdrawal_info = match self.management_fund.delayed_withdrawn_fund.account_registry.get(&delayed_withdrawal_account_id) {
-                    Some(delayed_withdrawal_info_) => delayed_withdrawal_info_,
-                    None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
-                    }
-                };
-                delayed_withdrawal_info.received_near_amount += near_amount;
-                self.management_fund.delayed_withdrawn_fund.account_registry.insert(&delayed_withdrawal_account_id, &delayed_withdrawal_info);
-
                 let mut validator_info = match self.validating_node.validator_registry.get(&validator_account_id) {
                     Some(validator_info_) => validator_info_,
                     None => {
                         env::panic_str("Nonexecutable code. Account must exist.");
                     }
                 };
-                validator_info.classic_staked_balance -= near_amount;
+
+                match stake_decreasing_type {
+                    StakeDecreasingType::Classic => {
+                        validator_info.classic_staked_balance -= near_amount;
+                        self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount -= near_amount;
+                    }
+                    StakeDecreasingType::Investment => {
+                        let mut investment_withdrawal_info = match self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+                            Some(investment_withdrawal_info_) => investment_withdrawal_info_,
+                            None => {
+                                env::panic_str("Nonexecutable code. Account must exist.");
+                            }
+                        };
+                        if near_amount < investment_withdrawal_info.near_amount {
+                            investment_withdrawal_info.near_amount -= near_amount;
+
+                            self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal_info);
+                        } else {
+                            self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.remove(&validator_account_id);
+
+                            Promise::new(investment_withdrawal_info.account_id)
+                                .transfer(refundable_near_amount);
+                        }
+
+                        validator_info.investment_staked_balance -= near_amount;
+                        self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount -= near_amount;
+                    }
+                }
+
                 validator_info.unstaked_balance += near_amount;
                 self.validating_node.validator_registry.insert(&validator_account_id, &validator_info);
 
@@ -1710,7 +1736,7 @@ impl StakePool {
                     }
                 };
 
-                self.management_fund.delayed_withdrawn_fund.delayed_withdrawal_balance += validator_info.unstaked_balance;
+                self.management_fund.delayed_withdrawn_fund.balance += validator_info.unstaked_balance;
 
                 validator_info.unstaked_balance = 0;
                 self.validating_node.validator_registry.insert(&validator_account_id, &validator_info);
@@ -1826,3 +1852,12 @@ impl StakePool {
 //  TODO TODO TODO ВСе Итераторы на Вью делать через индекс.     https://github.com/NearDeFi/burrowland/blob/0dbfa1803bf26353ffbee2ffd4f494bab23b2756/contract/src/account.rs#L207
 
 // TODO TODO TODO TODO TODO Важно запрашивать необходимое количество газа, чтобы хватило на  контракт + кроссколл + коллбек. Иначе что-то выполнится, а что-то нет.
+
+// TODO C Валидатора, по идее, придет немного больше неар, чем запрошено по методам, так как мы ожидаем запрос на Анстейк 4 эпохи, в это время количество отдаваемого зафиксировано, но оно еще приносит прибыль (затем еще 4 эпохи, чтобы забрать), что с этим делать?
+
+// TODO В каждом методе проверить, что все, что взято из хранилища, в него и положено. (get, insert.) .
+// TODO проверить, что взятые из хранилища параметры изменяются там, где это требуется.
+
+// TODO проверить, нет ли такого, чтобы пользователб мог что-то сделать за другого пользователя. То есть. АккаунтАйди передается в сигнатуру, а не берется ПредецессорАккаунтАйди
+
+// TODO, пороверить все ли методы нужны.

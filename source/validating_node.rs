@@ -12,7 +12,7 @@ use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
     pub validator_registry: UnorderedMap<AccountId, ValidatorInfo>,
-    /// Registry of Investors who are allowed to make an deposit directly on validator.
+    /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
     pub investor_registry: LookupMap<AccountId, InvestorInfo>,
     pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
     pub validators_maximum_quantity: Option<u64>,
@@ -47,13 +47,13 @@ impl ValidatingNode {
     }
 
     fn calculate_storage_usage_per_additional_validator() -> Result<StorageUsage, BaseError> {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
-        let mut validator_account_registry = Self::initialize_validator_registry();
+        let mut validator_registry = Self::initialize_validator_registry();
 
         let initial_storage_usage = env::storage_usage();
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        validator_account_registry.insert(
+        validator_registry.insert(
             &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic)
         );
 
@@ -65,13 +65,13 @@ impl ValidatingNode {
     }
 
     fn calculate_storage_usage_per_additional_investor() -> Result<StorageUsage, BaseError> {
-        let mut investor_account_registry = Self::initialize_investor_registry();
+        let mut investor_registry = Self::initialize_investor_registry();
 
         let initial_storage_usage = env::storage_usage();
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        investor_account_registry.insert(&account_id, &InvestorInfo::new(account_id.clone())?);
+        investor_registry.insert(&account_id, &InvestorInfo::new(account_id.clone())?);
 
         if env::storage_usage() < initial_storage_usage {
             return Err(BaseError::Logic);
@@ -83,11 +83,11 @@ impl ValidatingNode {
     fn calculate_storage_usage_per_additional_distribution() -> Result<StorageUsage, BaseError> {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        let mut validator_distribution_account_registry = InvestorInfo::initialize_distribution_registry(account_id.clone());
+        let mut distribution_registry = InvestorInfo::initialize_distribution_registry(account_id.clone());
 
         let initial_storage_usage = env::storage_usage();
 
-        validator_distribution_account_registry.insert(&account_id, &0);
+        distribution_registry.insert(&account_id, &0);
 
         if env::storage_usage() < initial_storage_usage {
             return Err(BaseError::Logic);

@@ -31,22 +31,19 @@ impl FungibleToken {
                 account_registry: Self::initialize_account_registry(),
                 accounts_quantity: 0,
                 metadata: Self::initialize_metadata(&fungible_token_metadata),
-                storage_usage_per_account: Self::calculate_storage_usage_per_additional_token_account()?
+                storage_usage_per_account: Self::calculate_storage_usage_per_additional_account()?
             }
         )
     }
 
-    fn calculate_storage_usage_per_additional_token_account() -> Result<StorageUsage, BaseError> {
-        let mut token_account_registry = Self::initialize_account_registry();
+    fn calculate_storage_usage_per_additional_account() -> Result<StorageUsage, BaseError> {
+        let mut account_registry = Self::initialize_account_registry();
 
         let initial_storage_usage = env::storage_usage();
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        token_account_registry.insert(
-            &account_id,
-            &0
-        );
+        account_registry.insert(&account_id, &0);
 
         if env::storage_usage() < initial_storage_usage {
             return Err(BaseError::Logic);
