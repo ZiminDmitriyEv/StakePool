@@ -6,6 +6,7 @@ use std::fmt::Formatter;
 #[derive(Debug)]
 pub enum BaseError {        // TODO описать Контектс там, где он нцжен для понимания информации.
     Logic,
+    Gas,
     ContractStateAlreadyInitialized,
     UnauthorizedManagementOnlyByManager,
     UnauthorizedManagement,
@@ -198,6 +199,9 @@ impl Display for BaseError {
                 formatter.write_str("todo.")?;
             }
             Self::SomeFundIsNotUnstaked => {
+                formatter.write_str("todo.")?;
+            }
+            Self::Gas => {
                 formatter.write_str("todo.")?;
             }
         }

@@ -1,11 +1,12 @@
 use core::convert::Into;
-use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage};
+use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information_dto::AggregatedInformationDto;
 use super::base_error::BaseError;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
+use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
@@ -96,6 +97,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_deposit(&mut self) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
 
         let predecessor_account_id = env::predecessor_account_id();
@@ -175,6 +177,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         near_amount: Balance,
         validator_account_id: AccountId
     ) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
 
         if near_amount == 0 {
@@ -248,6 +251,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_instant_withdraw(&mut self, token_amount: Balance) -> Result<Promise, BaseError> {   // TODO проставить процент на снятие!!
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
 
         if token_amount == 0 {
@@ -301,6 +305,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_delayed_withdraw(&mut self, token_amount: Balance) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
 
         if token_amount == 0 {
@@ -385,6 +390,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         near_amount: Balance,
         validator_account_id: AccountId
     ) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
 
         if near_amount == 0 {
@@ -523,6 +529,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_account_id: AccountId,
         near_amount: Balance
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -566,6 +573,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         near_amount: Balance,
         stake_decreasing_type: StakeDecreasingType
     ) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
         Self::assert_epoch_is_right(self.current_epoch_height)?;
@@ -630,6 +638,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Result<Promise, BaseError> {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_desynchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -667,6 +676,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_update_validator_info(&mut self, validator_account_id: AccountId) -> Result<Promise, BaseError> {     // TODO TODO TODO Что делать, если в новой эпохе часть обновилась, и уже еще раз наступила новая эпоха, и теперь то, что осталось, обновились. То есть, рассинхронизация состояния.   // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_desynchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -699,6 +709,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_update(&mut self) -> Result<(), BaseError>{
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_desynchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -759,6 +770,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_take_delayed_withdrawal(&mut self) -> Result<Promise, BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
 
         let predecessor_account_id = env::predecessor_account_id();
@@ -795,6 +807,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_staking_contract_version: ValidatorStakingContractVersion,
         is_preferred: bool
     ) -> Result<(), BaseError> {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -831,6 +844,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_remove_validator(&mut self, validator_account_id: AccountId) -> Result<Promise, BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -865,6 +879,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_add_investor(&mut self, investor_account_id: AccountId) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -889,6 +904,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_remove_investor(&mut self, investor_account_id: AccountId) -> Result<Promise, BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -914,6 +930,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_manager(&mut self, manager_id: AccountId) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management()?;
 
@@ -923,6 +940,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_rewards_fee(&mut self, rewards_fee: Option<Fee>) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -936,6 +954,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -949,6 +968,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -972,6 +992,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn internal_confirm_stake_distribution(&mut self) -> Result<(), BaseError> {
+        Self::assert_gas_is_enough()?;
         self.assert_epoch_is_synchronized()?;
         self.assert_authorized_management_only_by_manager()?;
 
@@ -1150,6 +1171,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Ok(())
     }
 
+    fn assert_gas_is_enough() -> Result<(), BaseError> {        // TODO проссчитать Количество Газа для каждого метода и вставить сюда в сигнатуру.
+        if env::prepaid_gas() < (Gas::ONE_TERA * MAXIMUM_NUMBER_OF_TGAS) {
+            return Err(BaseError::Gas);
+        }
+
+        Ok(())
+    }
+
     fn assert_epoch_is_right(epoch_height: EpochHeight) -> Result<(), BaseError> {
         if epoch_height % 4 != 0  {
             return Err(BaseError::NotRightEpoch);
@@ -1171,7 +1200,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 }
 
 #[near_bindgen]
-impl StakePool {                // TODO в сигнатуре методов вместо Баланс проставить U128.
+impl StakePool {
     #[init]
     pub fn new(
         manager_id: Option<AccountId>,
@@ -1204,15 +1233,15 @@ impl StakePool {                // TODO в сигнатуре методов в�
     /// Stake process directly to the validator.
     /// Available only for Investor.
     #[payable]
-    pub fn deposit_on_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) {
-        if let Err(error) = self.internal_deposit_on_validator(near_amount, validator_account_id) {
+    pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
+        if let Err(error) = self.internal_deposit_on_validator(near_amount.into(), validator_account_id) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
 
     /// Instant unstake process.
-    pub fn instant_withdraw(&mut self, token_amount: Balance) -> Promise {
-        match self.internal_instant_withdraw(token_amount) {
+    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
+        match self.internal_instant_withdraw(token_amount.into()) {
             Ok(promise) => {
                 promise
             }
@@ -1224,8 +1253,8 @@ impl StakePool {                // TODO в сигнатуре методов в�
 
     /// Delayed unstake process.
     #[payable]
-    pub fn delayed_withdraw(&mut self, token_amount: Balance) {
-        if let Err(error) = self.internal_delayed_withdraw(token_amount) {
+    pub fn delayed_withdraw(&mut self, token_amount: U128) {
+        if let Err(error) = self.internal_delayed_withdraw(token_amount.into()) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
@@ -1233,18 +1262,14 @@ impl StakePool {                // TODO в сигнатуре методов в�
     /// Delayed unstake process directly from validator
     /// Available only for Investor.
     #[payable]
-    pub fn delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) {
-        if let Err(error) = self.internal_delayed_withdraw_from_validator(near_amount, validator_account_id) {
+    pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
+        if let Err(error) = self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id) {
             env::panic_str(format!("{}", error).as_str());
         }
     }
 
-    pub fn increase_validator_stake(
-        &mut self,
-        validator_account_id: AccountId,
-        near_amount: Balance
-    ) -> Promise {
-        match self.internal_increase_validator_stake(validator_account_id, near_amount) {
+    pub fn increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: U128) -> Promise {
+        match self.internal_increase_validator_stake(validator_account_id, near_amount.into()) {
             Ok(promise) => {
                 promise
             }
@@ -1258,10 +1283,10 @@ impl StakePool {                // TODO в сигнатуре методов в�
     pub fn requested_decrease_validator_stake(
         &mut self,
         validator_account_id: AccountId,
-        near_amount: Balance,
+        near_amount: U128,
         stake_decreasing_type: StakeDecreasingType
     ) -> Promise {
-        match self.internal_requested_decrease_validator_stake(validator_account_id, near_amount, stake_decreasing_type) {
+        match self.internal_requested_decrease_validator_stake(validator_account_id, near_amount.into(), stake_decreasing_type) {
             Ok(promise) => {
                 promise
             }
@@ -1411,8 +1436,8 @@ impl StakePool {                // TODO в сигнатуре методов в�
         }
     }
 
-    pub fn get_token_amount_from_near_amount(&self, near_amount: Balance) -> U128 {
-        match self.internal_get_token_amount_from_near_amount(near_amount) {
+    pub fn get_token_amount_from_near_amount(&self, near_amount: U128) -> U128 {
+        match self.internal_get_token_amount_from_near_amount(near_amount.into()) {
             Ok(token_amount) => {
                 token_amount.into()
             }
@@ -1422,8 +1447,8 @@ impl StakePool {                // TODO в сигнатуре методов в�
         }
     }
 
-    pub fn get_near_amount_from_token_amount(&self, token_amount: Balance) -> U128 {
-        match self.internal_get_near_amount_from_token_amount(token_amount) {
+    pub fn get_near_amount_from_token_amount(&self, token_amount: U128) -> U128 {
+        match self.internal_get_near_amount_from_token_amount(token_amount.into()) {
             Ok(near_amount) => {
                 near_amount.into()
             }
@@ -1797,7 +1822,7 @@ impl StakePool {
     }
 }
 
-// TODO  Добавить к системным Промисам Коллбэк (логирование или подобное)
+// TODO  Добавить к системным Промисам Коллбэк (логирование или подобное) ?
 
 // TODO проставить проверку по типу amount>0.
 
@@ -1861,3 +1886,9 @@ impl StakePool {
 // TODO проверить, нет ли такого, чтобы пользователб мог что-то сделать за другого пользователя. То есть. АккаунтАйди передается в сигнатуру, а не берется ПредецессорАккаунтАйди
 
 // TODO, пороверить все ли методы нужны.
+
+// TODO TODO TODO TODO TODO Можно ли будет перейти на МУЛЬТИСИГ флоу управления после деплоя классического флоу управления.
+
+// написать методы для Михаила.
+// НАписать DecreaseValidatorStake.
+// TODO логировать

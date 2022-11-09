@@ -3,7 +3,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
 use super::base_error::BaseError;
 use super::fungible_token_metadata::FungibleTokenMetadata;
-use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
+use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -41,7 +41,7 @@ impl FungibleToken {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         account_registry.insert(&account_id, &0);
 

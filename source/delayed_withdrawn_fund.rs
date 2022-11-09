@@ -4,7 +4,7 @@ use near_sdk::collections::LookupMap;
 use super::base_error::BaseError;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
-use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
+use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -48,7 +48,7 @@ impl DelayedWithdrawnFund {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         account_registry.insert(
             &account_id,
@@ -70,7 +70,7 @@ impl DelayedWithdrawnFund {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         investment_withdrawal_registry.insert(
             &account_id,

@@ -1,10 +1,9 @@
-use crate::ONE_TERA;
 use near_sdk::{env, StorageUsage, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap, LookupMap};
 use super::base_error::BaseError;
 use super::investor_info::InvestorInfo;
-use super::MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
+use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
@@ -51,7 +50,7 @@ impl ValidatingNode {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         validator_registry.insert(
             &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic)
@@ -69,7 +68,7 @@ impl ValidatingNode {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         investor_registry.insert(&account_id, &InvestorInfo::new(account_id.clone())?);
 
@@ -81,7 +80,7 @@ impl ValidatingNode {
     }
 
     fn calculate_storage_usage_per_additional_distribution() -> Result<StorageUsage, BaseError> {
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMIN_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         let mut distribution_registry = InvestorInfo::initialize_distribution_registry(account_id.clone());
 
