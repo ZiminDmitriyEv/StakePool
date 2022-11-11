@@ -1,7 +1,6 @@
 use near_sdk::{env, AccountId, Balance, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
-use super::base_error::BaseError;
 use super::fungible_token_metadata::FungibleTokenMetadata;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
@@ -18,25 +17,23 @@ pub struct FungibleToken {
 }
 
 impl FungibleToken {
-    pub fn new(owner_id: AccountId) -> Result<Self, BaseError> {
+    pub fn new(owner_id: AccountId) -> Self {
         let fungible_token_metadata = FungibleTokenMetadata::new();
         if !fungible_token_metadata.is_valid() {
-            return Err(BaseError::InvalidFungibleTokenMetadata);
+            env::panic_str("Token metadata is not valid.");
         }
 
-        Ok(
-            Self {
-                owner_id,
-                total_supply: 0,
-                account_registry: Self::initialize_account_registry(),
-                accounts_quantity: 0,
-                metadata: Self::initialize_metadata(&fungible_token_metadata),
-                storage_usage_per_account: Self::calculate_storage_usage_per_additional_account()?
-            }
-        )
+        Self {
+            owner_id,
+            total_supply: 0,
+            account_registry: Self::initialize_account_registry(),
+            accounts_quantity: 0,
+            metadata: Self::initialize_metadata(&fungible_token_metadata),
+            storage_usage_per_account: Self::calculate_storage_usage_per_additional_account()
+        }
     }
 
-    fn calculate_storage_usage_per_additional_account() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_account() -> StorageUsage {
         let mut account_registry = Self::initialize_account_registry();
 
         let initial_storage_usage = env::storage_usage();
@@ -45,11 +42,7 @@ impl FungibleToken {
 
         account_registry.insert(&account_id, &0);
 
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
+        env::storage_usage() - initial_storage_usage
     }
 
     fn initialize_account_registry() -> LookupMap<AccountId, Balance> {

@@ -1,5 +1,4 @@
 pub(crate) mod aggregated_information_dto;
-pub(crate) mod base_error;
 pub(crate) mod delayed_withdrawal_info;
 pub(crate) mod delayed_withdrawn_fund;
 pub(crate) mod fee_registry;
@@ -9,6 +8,7 @@ pub(crate) mod fungible_token;
 pub(crate) mod investment_withdrawal_info;
 pub(crate) mod investor_info;
 pub(crate) mod management_fund;
+pub(crate) mod requested_to_withdrawal_fund;
 pub mod stake_pool;
 pub(crate) mod stake_decreasing_kind;
 pub(crate) mod storage_key;

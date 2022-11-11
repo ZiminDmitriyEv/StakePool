@@ -1,7 +1,6 @@
 use near_sdk::{Balance, AccountId, env, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
-use super::base_error::BaseError;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
@@ -19,7 +18,7 @@ pub struct DelayedWithdrawnFund {
     /// Classic near amount to be requested from the validator.
     pub needed_to_request_classic_near_amount: Balance,
     /// Investment near amount to be requested from the validator.
-    pub needed_to_request_investment_near_amount: Balance,
+    pub needed_to_request_investment_near_amount: Balance,                                          // TODO вынести в отдельную структуру с реестрои выше?
     /// Near balance available for withdrawal after passing the delayed withdrawal process.
     pub balance: Balance,          // TODO посмотреть в свойствах и в методах, стоит ли именить near_balance на balance и подобное, то есть, near_ уже может быть в контексте.
     /// In bytes.
@@ -29,21 +28,19 @@ pub struct DelayedWithdrawnFund {
 }
 
 impl DelayedWithdrawnFund {
-    pub fn new() -> Result<Self, BaseError> {
-        Ok(
-            Self {
-                account_registry: Self::initialize_account_registry(),
-                investment_withdrawal_registry: Self::initialize_investment_withdrawal_registry(),
-                needed_to_request_classic_near_amount: 0,
-                needed_to_request_investment_near_amount: 0,
-                balance: 0,
-                storage_usage_per_account: Self::calculate_storage_usage_per_additional_account()?,
-                storage_usage_per_investment_withdrawal: Self::calculate_storage_usage_per_additional_investment_withdrawal()?
-            }
-        )
+    pub fn new() -> Self {
+        Self {
+            account_registry: Self::initialize_account_registry(),
+            investment_withdrawal_registry: Self::initialize_investment_withdrawal_registry(),
+            needed_to_request_classic_near_amount: 0,
+            needed_to_request_investment_near_amount: 0,
+            balance: 0,
+            storage_usage_per_account: Self::calculate_storage_usage_per_additional_account(),
+            storage_usage_per_investment_withdrawal: Self::calculate_storage_usage_per_additional_investment_withdrawal()
+        }
     }
 
-    fn calculate_storage_usage_per_additional_account() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_account() -> StorageUsage {
         let mut account_registry = Self::initialize_account_registry();
 
         let initial_storage_usage = env::storage_usage();
@@ -58,14 +55,10 @@ impl DelayedWithdrawnFund {
             }
         );
 
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
+        env::storage_usage() - initial_storage_usage
     }
 
-    fn calculate_storage_usage_per_additional_investment_withdrawal() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_investment_withdrawal() -> StorageUsage {
         let mut investment_withdrawal_registry = Self::initialize_investment_withdrawal_registry();
 
         let initial_storage_usage = env::storage_usage();
@@ -80,11 +73,7 @@ impl DelayedWithdrawnFund {
             }
         );
 
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
+        env::storage_usage() - initial_storage_usage
     }
 
     fn initialize_account_registry() -> LookupMap<AccountId, DelayedWithdrawalInfo> {

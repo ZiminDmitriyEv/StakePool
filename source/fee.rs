@@ -1,8 +1,8 @@
 use near_sdk::Balance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
+use near_sdk::env;
 use near_sdk::serde::{Deserialize, Serialize};
 use std::clone::Clone;
-use super::base_error::BaseError;
 use uint::construct_uint;
 
 construct_uint! {
@@ -17,16 +17,13 @@ pub struct Fee {
 }
 
 impl Fee {
-    pub fn assert_valid(&self) -> Result<(), BaseError> {
-        if self.denominator != 0 && self.numerator != 0 && self.numerator < self.denominator {
-            return Ok(());
+    pub fn assert_valid(&self) {
+        if self.denominator == 0 || self.numerator == 0 || self.numerator >= self.denominator {
+            env::panic_str("Fee is not valid.");
         }
-
-        Err(BaseError::InvalidFee)
     }
 
-    // TODO нужно ли сделать безопасно? Что здесь по огругению
-    pub fn multiply(&self, value: Balance) -> Balance {
+    pub fn multiply(&self, value: Balance) -> Balance {         // TODO нужно ли сделать безопасно? Что здесь по огругению
         (
             U256::from(self.numerator) * U256::from(value)
             / U256::from(self.denominator)

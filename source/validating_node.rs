@@ -1,7 +1,6 @@
 use near_sdk::{env, StorageUsage, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap, LookupMap};
-use super::base_error::BaseError;
 use super::investor_info::InvestorInfo;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
@@ -26,26 +25,21 @@ pub struct ValidatingNode {
 }
 
 impl ValidatingNode {
-    /// In fact it is needed 10 Tgas, but this is with a margin of safety.
-    const DEPOSIT_AND_STAKE_TGAS: u64 = 15;
-
-    pub fn new(validators_maximum_quantity: Option<u64>) -> Result<Self, BaseError> {
-        Ok(
-            Self {
-                validator_registry: Self::initialize_validator_registry(),
-                investor_registry: Self::initialize_investor_registry(),
-                validators_quantity: 0,
-                validators_maximum_quantity,
-                preffered_validtor: None,
-                quantity_of_validators_updated_in_current_epoch: 0,
-                storage_usage_per_validator: Self::calculate_storage_usage_per_additional_validator()?,
-                storage_usage_per_investor: Self::calculate_storage_usage_per_additional_investor()?,
-                storage_usage_per_distribution: Self::calculate_storage_usage_per_additional_distribution()?
-            }
-        )
+    pub fn new(validators_maximum_quantity: Option<u64>) -> Self {
+        Self {
+            validator_registry: Self::initialize_validator_registry(),
+            investor_registry: Self::initialize_investor_registry(),
+            validators_quantity: 0,
+            validators_maximum_quantity,
+            preffered_validtor: None,
+            quantity_of_validators_updated_in_current_epoch: 0,
+            storage_usage_per_validator: Self::calculate_storage_usage_per_additional_validator(),
+            storage_usage_per_investor: Self::calculate_storage_usage_per_additional_investor(),
+            storage_usage_per_distribution: Self::calculate_storage_usage_per_additional_distribution()
+        }
     }
 
-    fn calculate_storage_usage_per_additional_validator() -> Result<StorageUsage, BaseError> {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
+    fn calculate_storage_usage_per_additional_validator() -> StorageUsage {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
         let mut validator_registry = Self::initialize_validator_registry();
 
         let initial_storage_usage = env::storage_usage();
@@ -56,30 +50,22 @@ impl ValidatingNode {
             &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic)
         );
 
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
+        env::storage_usage() - initial_storage_usage
     }
 
-    fn calculate_storage_usage_per_additional_investor() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_investor() -> StorageUsage {
         let mut investor_registry = Self::initialize_investor_registry();
 
         let initial_storage_usage = env::storage_usage();
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        investor_registry.insert(&account_id, &InvestorInfo::new(account_id.clone())?);
+        investor_registry.insert(&account_id, &InvestorInfo::new(account_id.clone()));
 
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
+        env::storage_usage() - initial_storage_usage
     }
 
-    fn calculate_storage_usage_per_additional_distribution() -> Result<StorageUsage, BaseError> {
+    fn calculate_storage_usage_per_additional_distribution() -> StorageUsage {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         let mut distribution_registry = InvestorInfo::initialize_distribution_registry(account_id.clone());
@@ -88,11 +74,7 @@ impl ValidatingNode {
 
         distribution_registry.insert(&account_id, &0);
 
-        if env::storage_usage() < initial_storage_usage {
-            return Err(BaseError::Logic);
-        }
-
-        Ok(env::storage_usage() - initial_storage_usage)
+        env::storage_usage() - initial_storage_usage
     }
 
     fn initialize_validator_registry() -> UnorderedMap<AccountId, ValidatorInfo> {

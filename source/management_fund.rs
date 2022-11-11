@@ -1,6 +1,5 @@
 use near_sdk::Balance;
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use super::base_error::BaseError;
 use super::delayed_withdrawn_fund::DelayedWithdrawnFund;
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -12,15 +11,13 @@ pub struct ManagementFund {
 }
 
 impl ManagementFund {
-    pub fn new() -> Result<Self, BaseError> {
-        Ok(
-            Self {
-                unstaked_balance: 0,
-                staked_balance: 0,
-                delayed_withdrawn_fund: DelayedWithdrawnFund::new()?,
-                is_distributed_on_validators_in_current_epoch: false
-            }
-        )
+    pub fn new() -> Self {
+        Self {
+            unstaked_balance: 0,
+            staked_balance: 0,
+            delayed_withdrawn_fund: DelayedWithdrawnFund::new(),
+            is_distributed_on_validators_in_current_epoch: false
+        }
     }
 
     pub fn get_management_fund_amount(&self) -> Balance {
