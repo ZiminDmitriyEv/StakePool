@@ -1,8 +1,9 @@
 use near_sdk::{ext_contract, AccountId};
 use near_sdk::json_types::U128;
 
-#[ext_contract(ext_staking_pool)]
-pub trait ExtStakingPool {
+/// Default Near `staking pool` contract interface.
+#[ext_contract(validator)]
+pub trait Validator {
     // #[payable]
     fn deposit(&mut self);
 

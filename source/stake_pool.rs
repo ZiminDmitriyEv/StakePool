@@ -2,6 +2,7 @@ use core::convert::Into;
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
+use super::cross_contract_call::validator::validator;
 use super::data_transfer_object::aggregated_info::AggregatedInfo;
 use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfoDto;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
@@ -19,7 +20,6 @@ use super::stake_decreasing_kind::StakeDecreasingType;
 use super::validating_node::ValidatingNode;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
-use super::xcc_staking_pool::ext_staking_pool;
 use uint::construct_uint;
 
 construct_uint! {
@@ -341,7 +341,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                         Some(validator_info) => {
                             match validator_info.staking_contract_version {
                                 ValidatorStakingContractVersion::Classic => {
-                                    ext_staking_pool::ext(preffered_validator_account_id.clone())
+                                    validator::ext(preffered_validator_account_id.clone())
                                         .with_attached_deposit(near_amount)
                                         // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                         .deposit_and_stake()
@@ -431,7 +431,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         match validator_info.staking_contract_version {
             ValidatorStakingContractVersion::Classic => {
-                ext_staking_pool::ext(validator_account_id.clone())
+                validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
                     // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                     .deposit_and_stake()
@@ -760,7 +760,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             Some(validator_info) => {
                 match validator_info.staking_contract_version {
                     ValidatorStakingContractVersion::Classic => {
-                        ext_staking_pool::ext(validator_account_id.clone())
+                        validator::ext(validator_account_id.clone())
                             .with_attached_deposit(near_amount)
                             // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                             .deposit_and_stake()
@@ -829,7 +829,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         match validator_info.staking_contract_version {
             ValidatorStakingContractVersion::Classic => {
-                ext_staking_pool::ext(validator_account_id.clone())
+                validator::ext(validator_account_id.clone())
                     // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                     .unstake(near_amount.into())
                     .then(
@@ -865,7 +865,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
                 match validator_info.staking_contract_version {
                     ValidatorStakingContractVersion::Classic => {
-                        ext_staking_pool::ext(validator_account_id.clone())
+                        validator::ext(validator_account_id.clone())
                             // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                             .withdraw(validator_info.unstaked_balance.into())
                             .then(
@@ -893,7 +893,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 if validator_info.last_update_info_epoch_height < current_epoch_height {
                     match validator_info.staking_contract_version {
                         ValidatorStakingContractVersion::Classic => {
-                            return ext_staking_pool::ext(validator_account_id.clone())
+                            return validator::ext(validator_account_id.clone())
                                 // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                 .get_account_staked_balance(env::current_account_id())
                                 .then(
