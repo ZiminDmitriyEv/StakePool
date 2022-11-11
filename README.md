@@ -1,3 +1,12 @@
+
+
+
+
+ПЕРЕЧИТАТЬ ИМЕнитьыы
+
+
+
+
 # Stake pool contract
 
 This contract provides a way for other users to delegate funds to pool of validation nodes.

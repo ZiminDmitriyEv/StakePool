@@ -2,19 +2,21 @@ use core::convert::Into;
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
-use super::aggregated_information_dto::AggregatedInformationDto;
+use super::data_transfer_object::aggregated_info::AggregatedInfo;
+use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfoDto;
+use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
+use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
+use super::data_transfer_object::validator_info::ValidatorInfo as ValidatorInfoDto;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
 use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
-use super::investor_info::InvestorInfo;
+use super::investor_investment_info::InvestorInvestmentInfo;
 use super::management_fund::ManagementFund;
 use super::MAXIMUM_NUMBER_OF_TGAS;
-use super::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::stake_decreasing_kind::StakeDecreasingType;
 use super::validating_node::ValidatingNode;
-use super::validator_info_dto::ValidatorInfoDto;
 use super::validator_info::ValidatorInfo;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 use super::xcc_staking_pool::ext_staking_pool;
@@ -22,6 +24,215 @@ use uint::construct_uint;
 
 construct_uint! {
     pub struct U256(4);
+}
+
+#[near_bindgen]
+impl StakePool {
+    /// Call-methods:
+    #[init]
+    pub fn new(
+        manager_id: Option<AccountId>,
+        rewards_receiver_account_id: AccountId,
+        everstake_rewards_receiver_account_id: AccountId,
+        rewards_fee: Option<Fee>,
+        everstake_rewards_fee: Option<Fee>,
+        validators_maximum_quantity: Option<u64>
+    ) -> Self {      // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
+        Self::internal_new(
+            manager_id,
+            rewards_receiver_account_id,
+            everstake_rewards_receiver_account_id,
+            rewards_fee,
+            everstake_rewards_fee,
+            validators_maximum_quantity
+        )
+    }
+
+    /// Stake process.
+    #[payable]
+    pub fn deposit(&mut self) {
+        self.internal_deposit();
+    }
+
+    /// Stake process directly to the validator.
+    /// Available only for Investor.
+    #[payable]
+    pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
+        self.internal_deposit_on_validator(near_amount.into(), validator_account_id);
+    }
+
+    /// Instant unstake process.
+    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
+        self.internal_instant_withdraw(token_amount.into())
+    }
+
+    /// Delayed unstake process.
+    #[payable]
+    pub fn delayed_withdraw(&mut self, token_amount: U128) {
+        self.internal_delayed_withdraw(token_amount.into());
+    }
+
+    /// Delayed unstake process directly from validator
+    /// Available only for Investor.
+    #[payable]
+    pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
+        self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id);
+    }
+
+    pub fn take_delayed_withdrawal(&mut self) -> Promise {
+        self.internal_take_delayed_withdrawal()
+    }
+
+    pub fn increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: U128) -> Promise {
+        self.internal_increase_validator_stake(validator_account_id, near_amount.into())
+    }
+
+    /// Validator stake decreasing process for the needs of delayed withdrawal fund.
+    pub fn requested_decrease_validator_stake(
+        &mut self,
+        validator_account_id: AccountId,
+        near_amount: U128,
+        stake_decreasing_type: StakeDecreasingType
+    ) -> Promise {
+        self.internal_requested_decrease_validator_stake(validator_account_id, near_amount.into(), stake_decreasing_type)
+    }
+
+    pub fn take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Promise {
+        self.internal_take_unstaked_balance(validator_account_id)
+    }
+
+    pub fn update_validator_info(&mut self, validator_account_id: AccountId) -> Promise {
+        self.internal_update_validator_info(validator_account_id)
+    }
+
+    pub fn update(&mut self) {
+        self.internal_update();
+    }
+
+    #[payable]
+    pub fn add_validator(
+        &mut self,
+        validator_account_id: AccountId,
+        validator_staking_contract_version: ValidatorStakingContractVersion,
+        is_preferred: bool
+    ) {
+        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_preferred);
+    }
+
+    pub fn remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
+        self.internal_remove_validator(validator_account_id)
+    }
+
+    #[payable]
+    pub fn add_investor(&mut self, investor_account_id: AccountId) {
+        self.internal_add_investor(investor_account_id);
+    }
+
+    pub fn remove_investor(&mut self, investor_account_id: AccountId) -> Promise {
+        self.internal_remove_investor(investor_account_id)
+    }
+
+    pub fn change_manager(&mut self, manager_id: AccountId) {
+        self.internal_change_manager(manager_id);
+    }
+
+    pub fn change_rewards_fee(&mut self, rewards_fee: Option<Fee>) {
+        self.internal_change_rewards_fee(rewards_fee);
+    }
+
+    pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
+        self.internal_change_everstake_rewards_fee(everstake_rewards_fee);
+    }
+
+    pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
+        self.internal_change_preffered_validator(validator_account_id);
+    }
+
+    pub fn confirm_stake_distribution(&mut self) {
+        self.internal_confirm_stake_distribution();
+    }
+
+    /// View-methods:
+
+    pub fn has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
+        self.internal_has_delayed_withdrawal(account_id)
+    }
+
+    pub fn get_epoch_quantity_to_take_delayed_withdrawal(&self, account_id: AccountId) -> u64 {
+        self.internal_get_epoch_quantity_to_take_delayed_withdrawal(account_id)
+    }
+
+    pub fn is_account_registered(&self, account_id: AccountId) -> bool {
+        self.internal_is_account_registered(account_id)
+    }
+
+    pub fn get_account_balance(&self, account_id: AccountId) -> (U128, U128) {
+        self.internal_get_account_balance(account_id)
+    }
+
+    pub fn get_total_token_supply(&self) -> U128 {
+        self.internal_get_total_token_supply().into()
+    }
+
+    pub fn get_stakers_quantity(&self) -> u64 {
+        self.internal_get_stakers_quantity()
+    }
+
+    pub fn get_storage_staking_price(&self) -> StorageStakingPrice {
+        self.internal_get_storage_staking_price()
+    }
+
+    pub fn get_token_amount_from_near_amount(&self, near_amount: U128) -> U128 {
+        self.internal_get_token_amount_from_near_amount(near_amount.into()).into()
+    }
+
+    pub fn get_near_amount_from_token_amount(&self, token_amount: U128) -> U128 {
+        self.internal_get_near_amount_from_token_amount(token_amount.into()).into()
+    }
+
+    pub fn get_unstaked_balance(&self) -> U128 {
+        self.internal_get_unstaked_balance().into()
+    }
+
+    pub fn get_staked_balance(&self) -> U128 {
+        self.internal_get_staked_balance().into()
+    }
+
+    pub fn get_management_fund_amount(&self) -> U128 {
+        self.internal_get_management_fund_amount().into()
+    }
+
+    pub fn get_fee_registry(&self) -> FeeRegistry {
+        self.internal_get_fee_registry()
+    }
+
+    pub fn get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
+        self.internal_get_current_epoch_height()
+    }
+
+    pub fn is_stake_distributed(&self) -> bool {
+        self.internal_is_stake_distributed()
+    }
+
+    pub fn is_investor(&self, account_id: AccountId) -> bool {
+        self.internal_is_investor(account_id)
+    }
+
+    pub fn get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfoDto {
+        self.internal_get_investor_investment_info(account_id)
+    }
+
+    pub fn get_validator_info_registry(&self) -> Vec<ValidatorInfoDto> {
+        self.internal_get_validator_info_registry()
+    }
+
+    pub fn get_aggregated_info(&self) -> AggregatedInfo {
+        self.internal_get_aggregated_info()
+    }
+
+    pub fn get_requested_to_withdrawal_fund(&self) -> RequestedToWithdrawalFund {
+        self.internal_get_requested_to_withdrawal_fund()
+    }
 }
 
 #[near_bindgen]
@@ -188,13 +399,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let mut storage_staking_price_per_additional_accounts: Balance = 0;
 
-        let investor_info = match self.validating_node.investor_registry.get(&predecessor_account_id) {
-            Some(investor_info_) => investor_info_,
+        let investor_investment_info = match self.validating_node.investor_investment_registry.get(&predecessor_account_id) {
+            Some(investor_investment_info_) => investor_investment_info_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
-        if let None = investor_info.distribution_registry.get(&validator_account_id) {
+        if let None = investor_investment_info.distribution_registry.get(&validator_account_id) {
             storage_staking_price_per_additional_accounts += Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_distribution);
         }
 
@@ -269,8 +480,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.unstaked_balance -= near_amount;
 
         token_balance -= token_amount;
-        if let Some(investor_info) = self.validating_node.investor_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(token_balance) < investor_info.staked_balance {
+        if let Some(investor_investment_info) = self.validating_node.investor_investment_registry.get(&predecessor_account_id) {
+            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment_info.staked_balance {
                 env::panic_str("Token amount exceeded the available to instant withdraw token amount.");
             }
         }
@@ -287,7 +498,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.fungible_token.total_supply -= token_amount;
 
-        Promise::new(predecessor_account_id)
+        Promise::new(predecessor_account_id)                // TODO вот тут не лучше ли сделать через коллбек
             .transfer(near_amount)
     }
 
@@ -346,8 +557,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
         token_balance -= token_amount;
-        if let Some(investor_info) = self.validating_node.investor_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(token_balance) < investor_info.staked_balance {
+        if let Some(investor_investment_info) = self.validating_node.investor_investment_registry.get(&predecessor_account_id) {
+            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment_info.staked_balance {
                 env::panic_str("Token amount exceeded the available to delayed withdraw token amount.");
             }
         }
@@ -390,20 +601,20 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut investor_info = match self.validating_node.investor_registry.get(&predecessor_account_id) {
-            Some(investor_info_) => investor_info_,
+        let mut investor_investment_info = match self.validating_node.investor_investment_registry.get(&predecessor_account_id) {
+            Some(investor_investment_info_) => investor_investment_info_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
 
-        let mut investor_staked_balance_on_validator = match investor_info.distribution_registry.get(&validator_account_id) {
+        let mut staked_balance = match investor_investment_info.distribution_registry.get(&validator_account_id) {
             Some(staked_balance_) => staked_balance_,
             None => {
                 env::panic_str("There is no investor stake on this validator.");
             }
         };
-        if near_amount > investor_staked_balance_on_validator {
+        if near_amount > staked_balance {
             env::panic_str("Near amount exceeded the available investor near balance on validator.");
         }
 
@@ -472,16 +683,18 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal_info);
         self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount += near_amount;
 
-        if near_amount < investor_staked_balance_on_validator {
-            investor_staked_balance_on_validator -= near_amount;
+        if near_amount < staked_balance {
+            staked_balance -= near_amount;
 
-            investor_info.distribution_registry.insert(&validator_account_id, &investor_staked_balance_on_validator);
+            investor_investment_info.distribution_registry.insert(&validator_account_id, &staked_balance);
         } else {
-            investor_info.distribution_registry.remove(&validator_account_id);
+            investor_investment_info.distribution_registry.remove(&validator_account_id);
+            investor_investment_info.distributions_quantity -= 1;
 
             near_refundable_deposit += Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_distribution);
         }
-        self.validating_node.investor_registry.insert(&predecessor_account_id, &investor_info);
+        investor_investment_info.staked_balance -= near_amount;
+        self.validating_node.investor_investment_registry.insert(&predecessor_account_id, &investor_investment_info);
 
         token_balance -= token_amount;
         if token_balance > 0
@@ -836,8 +1049,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Insufficient near deposit.");
         }
 
-        if let Some(_) = self.validating_node.investor_registry.insert(
-            &investor_account_id, &InvestorInfo::new(investor_account_id.clone())
+        if let Some(_) = self.validating_node.investor_investment_registry.insert(
+            &investor_account_id, &InvestorInvestmentInfo::new(investor_account_id.clone())
         ) {
             env::panic_str("Investor account is already registered.");
         }
@@ -854,13 +1067,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
-        let investor_info = match self.validating_node.investor_registry.remove(&investor_account_id) {  // TODO TODO TODO TODO TODO Обратить внимание, что на постоянное количество инвестмент токенов приходится увеличивающееся количество неара, но инвестмент баланс зафиксирован.
-            Some(investor_info_) => investor_info_,
+        let investor_investment_info = match self.validating_node.investor_investment_registry.remove(&investor_account_id) {  // TODO TODO TODO TODO TODO Обратить внимание, что на постоянное количество инвестмент токенов приходится увеличивающееся количество неара, но инвестмент баланс зафиксирован.
+            Some(investor_investment_info_) => investor_investment_info_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
-        if investor_info.staked_balance > 0 || investor_info.distributions_quantity > 0 {
+        if investor_investment_info.staked_balance > 0 || investor_investment_info.distributions_quantity > 0 {
             env::panic_str("Validator has an available balance.");
         }
 
@@ -949,7 +1162,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_is_token_account_registered(&self, account_id: AccountId) -> bool {
+    fn internal_is_account_registered(&self, account_id: AccountId) -> bool {
         self.fungible_token.account_registry.contains_key(&account_id)
     }
 
@@ -963,8 +1176,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fungible_token.accounts_quantity
     }
 
-    fn internal_get_storage_staking_price_per_additional_token_account(&self) -> Balance {
-        Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account)
+    pub fn internal_get_storage_staking_price(&self) -> StorageStakingPrice {
+        StorageStakingPrice {
+            per_delayed_withdrawal_fund_account: Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account).into(),
+            per_delayed_withdrawal_fund_investment_withdrawal: Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_investment_withdrawal).into(),
+            per_fungible_token_account: Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account).into(),
+            per_validating_node_validator: Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_validator).into(),
+            per_validating_node_investor: Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_investor).into(),
+            per_validating_node_distribution: Self::calculate_storage_staking_price(self.validating_node.storage_usage_per_distribution).into()
+        }
     }
 
     fn internal_get_token_amount_from_near_amount(&self, near_amount: Balance) -> Balance {
@@ -979,9 +1199,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.convert_token_amount_to_near_amount(token_amount)
     }
 
-    fn internal_get_token_account_balance(&self, account_id: AccountId) -> Balance {
+    fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128) {
         match self.fungible_token.account_registry.get(&account_id) {
-            Some(token_balance) => token_balance,
+            Some(token_balance) => (token_balance.into(), self.convert_token_amount_to_near_amount(token_balance).into()),
             None => {
                 env::panic_str("Token account is not registered yet.");
             }
@@ -1023,31 +1243,34 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     pub fn internal_is_investor(&self, account_id: AccountId) -> bool {
         self.assert_epoch_is_synchronized();
 
-        self.validating_node.investor_registry.contains_key(&account_id)
+        self.validating_node.investor_investment_registry.contains_key(&account_id)
     }
 
-    pub fn internal_get_investor_investments(&self, account_id: AccountId) -> Vec<(AccountId, U128)> {
+    pub fn internal_get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfoDto {
         self.assert_epoch_is_synchronized();
 
         let mut distribution_registry: Vec<(AccountId, U128)> = vec![];
 
-        let investor_info = match self.validating_node.investor_registry.get(&account_id) {
-            Some(investor_info_) => investor_info_,
+        let investor_investment_info = match self.validating_node.investor_investment_registry.get(&account_id) {
+            Some(investor_investment_info_) => investor_investment_info_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
 
         for validator_account_id in self.validating_node.validator_registry.keys() {
-            if let Some(staked_balance) = investor_info.distribution_registry.get(&validator_account_id) {
+            if let Some(staked_balance) = investor_investment_info.distribution_registry.get(&validator_account_id) {
                 distribution_registry.push((validator_account_id, staked_balance.into()));
             }
         }
 
-        distribution_registry
+        InvestorInvestmentInfoDto {
+            distribution_registry,
+            staked_balance: investor_investment_info.staked_balance.into()
+        }
     }
 
-    fn internal_get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> {
+    fn internal_get_validator_info_registry(&self) -> Vec<ValidatorInfoDto> {
         let mut validator_info_dto_registry: Vec<ValidatorInfoDto> = vec![];
 
         for (account_id, validator_info) in self.validating_node.validator_registry.into_iter() {
@@ -1074,10 +1297,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_info_dto_registry
     }
 
-    fn internal_get_aggregated_information_dto(&self) -> AggregatedInformationDto {
+    fn internal_get_aggregated_info(&self) -> AggregatedInfo {
         self.assert_epoch_is_synchronized();
 
-        AggregatedInformationDto {
+        AggregatedInfo {
             unstaked_balance: self.management_fund.unstaked_balance.into(),
             staked_balance: self.management_fund.staked_balance.into(),
             token_total_supply: self.fungible_token.total_supply.into(),
@@ -1177,215 +1400,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
 #[near_bindgen]
 impl StakePool {
-    /// Call-methods:
-    #[init]
-    pub fn new(
-        manager_id: Option<AccountId>,
-        rewards_receiver_account_id: AccountId,
-        everstake_rewards_receiver_account_id: AccountId,
-        rewards_fee: Option<Fee>,
-        everstake_rewards_fee: Option<Fee>,
-        validators_maximum_quantity: Option<u64>
-    ) -> Self {      // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
-        Self::internal_new(
-            manager_id,
-            rewards_receiver_account_id,
-            everstake_rewards_receiver_account_id,
-            rewards_fee,
-            everstake_rewards_fee,
-            validators_maximum_quantity
-        )
-    }
-
-    /// Stake process.
-    #[payable]
-    pub fn deposit(&mut self) {
-        self.internal_deposit();
-    }
-
-    /// Stake process directly to the validator.
-    /// Available only for Investor.
-    #[payable]
-    pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
-        self.internal_deposit_on_validator(near_amount.into(), validator_account_id);
-    }
-
-    /// Instant unstake process.
-    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
-        self.internal_instant_withdraw(token_amount.into())
-    }
-
-    /// Delayed unstake process.
-    #[payable]
-    pub fn delayed_withdraw(&mut self, token_amount: U128) {
-        self.internal_delayed_withdraw(token_amount.into());
-    }
-
-    /// Delayed unstake process directly from validator
-    /// Available only for Investor.
-    #[payable]
-    pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
-        self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id);
-    }
-
-    pub fn take_delayed_withdrawal(&mut self) -> Promise {
-        self.internal_take_delayed_withdrawal()
-    }
-
-    pub fn increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: U128) -> Promise {
-        self.internal_increase_validator_stake(validator_account_id, near_amount.into())
-    }
-
-    /// Validator stake decreasing process for the needs of delayed withdrawal fund.
-    pub fn requested_decrease_validator_stake(
-        &mut self,
-        validator_account_id: AccountId,
-        near_amount: U128,
-        stake_decreasing_type: StakeDecreasingType
-    ) -> Promise {
-        self.internal_requested_decrease_validator_stake(validator_account_id, near_amount.into(), stake_decreasing_type)
-    }
-
-    pub fn take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Promise {
-        self.internal_take_unstaked_balance(validator_account_id)
-    }
-
-    pub fn update_validator_info(&mut self, validator_account_id: AccountId) -> Promise {
-        self.internal_update_validator_info(validator_account_id)
-    }
-
-    pub fn update(&mut self) {
-        self.internal_update();
-    }
-
-    #[payable]
-    pub fn add_validator(
-        &mut self,
-        validator_account_id: AccountId,
-        validator_staking_contract_version: ValidatorStakingContractVersion,
-        is_preferred: bool
-    ) {
-        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_preferred);
-    }
-
-    pub fn remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
-        self.internal_remove_validator(validator_account_id)
-    }
-
-    #[payable]
-    pub fn add_investor(&mut self, investor_account_id: AccountId) {
-        self.internal_add_investor(investor_account_id);
-    }
-
-    pub fn remove_investor(&mut self, investor_account_id: AccountId) -> Promise {
-        self.internal_remove_investor(investor_account_id)
-    }
-
-    pub fn change_manager(&mut self, manager_id: AccountId) {
-        self.internal_change_manager(manager_id);
-    }
-
-    pub fn change_rewards_fee(&mut self, rewards_fee: Option<Fee>) {
-        self.internal_change_rewards_fee(rewards_fee);
-    }
-
-    pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
-        self.internal_change_everstake_rewards_fee(everstake_rewards_fee);
-    }
-
-    pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
-        self.internal_change_preffered_validator(validator_account_id);
-    }
-
-    pub fn confirm_stake_distribution(&mut self) {
-        self.internal_confirm_stake_distribution();
-    }
-
-    /// View-methods:
-
-    pub fn has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
-        self.internal_has_delayed_withdrawal(account_id)
-    }
-
-    pub fn get_epoch_quantity_to_take_delayed_withdrawal(&self, account_id: AccountId) -> u64 {
-        self.internal_get_epoch_quantity_to_take_delayed_withdrawal(account_id)
-    }
-
-    pub fn is_token_account_registered(&self, account_id: AccountId) -> bool {
-        self.internal_is_token_account_registered(account_id)
-    }
-
-    pub fn get_total_token_supply(&self) -> U128 {
-        self.internal_get_total_token_supply().into()
-    }
-
-    pub fn get_stakers_quantity(&self) -> u64 {
-        self.internal_get_stakers_quantity()
-    }
-
-    pub fn get_storage_staking_price_per_additional_token_account(&self) -> U128 {
-        self.internal_get_storage_staking_price_per_additional_token_account().into()
-    }
-
-    pub fn get_token_amount_from_near_amount(&self, near_amount: U128) -> U128 {
-        self.internal_get_token_amount_from_near_amount(near_amount.into()).into()
-    }
-
-    pub fn get_near_amount_from_token_amount(&self, token_amount: U128) -> U128 {
-        self.internal_get_near_amount_from_token_amount(token_amount.into()).into()
-    }
-
-    pub fn get_token_account_balance(&self, account_id: AccountId) -> U128 {
-        self.internal_get_token_account_balance(account_id).into()
-    }
-
-    pub fn get_unstaked_balance(&self) -> U128 {
-        self.internal_get_unstaked_balance().into()
-    }
-
-    pub fn get_staked_balance(&self) -> U128 {
-        self.internal_get_staked_balance().into()
-    }
-
-    pub fn get_management_fund_amount(&self) -> U128 {
-        self.internal_get_management_fund_amount().into()
-    }
-
-    pub fn get_fee_registry(&self) -> FeeRegistry {
-        self.internal_get_fee_registry()
-    }
-
-    pub fn get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
-        self.internal_get_current_epoch_height()
-    }
-
-    pub fn is_stake_distributed(&self) -> bool {
-        self.internal_is_stake_distributed()
-    }
-
-    pub fn is_investor(&self, account_id: AccountId) -> bool {
-        self.internal_is_investor(account_id)
-    }
-
-    pub fn get_investor_investments(&self, account_id: AccountId) -> Vec<(AccountId, U128)> {
-        self.internal_get_investor_investments(account_id)
-    }
-
-    pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)
-        self.internal_get_validator_info_dto()
-    }
-
-    pub fn get_aggregated_information_dto(&self) -> AggregatedInformationDto { // TODO есть Info , есть Information (проблема в имени)
-        self.internal_get_aggregated_information_dto()
-    }
-
-    pub fn get_requested_to_withdrawal_fund(&self) -> RequestedToWithdrawalFund {
-        self.internal_get_requested_to_withdrawal_fund()
-    }
-}
-
-#[near_bindgen]
-impl StakePool {
     #[private]
     pub fn deposit_callback(
         &mut self,
@@ -1456,24 +1470,24 @@ impl StakePool {
                 validator_info.investment_staked_balance += near_amount;
                 self.validating_node.validator_registry.insert(&validator_account_id, &validator_info);
 
-                let mut investor_info = match self.validating_node.investor_registry.get(&predecessor_account_id) {
-                    Some(investor_info_) => investor_info_,
+                let mut investor_investment_info = match self.validating_node.investor_investment_registry.get(&predecessor_account_id) {
+                    Some(investor_investment_info_) => investor_investment_info_,
                     None => {
                         env::panic_str("Nonexecutable code. Account must exist.");
                     }
                 };
-                let mut staked_balance = match investor_info.distribution_registry.get(&validator_account_id) {
+                let mut staked_balance = match investor_investment_info.distribution_registry.get(&validator_account_id) {
                     Some(staked_balance_) => staked_balance_,
                     None => {
-                        investor_info.distributions_quantity += 1;
+                        investor_investment_info.distributions_quantity += 1;
 
                         0
                     }
                 };
                 staked_balance += near_amount;
-                investor_info.distribution_registry.insert(&validator_account_id, &staked_balance);
-                investor_info.staked_balance += near_amount;
-                self.validating_node.investor_registry.insert(&predecessor_account_id, &investor_info);
+                investor_investment_info.distribution_registry.insert(&validator_account_id, &staked_balance);
+                investor_investment_info.staked_balance += near_amount;
+                self.validating_node.investor_investment_registry.insert(&predecessor_account_id, &investor_investment_info);
 
                 let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
                     Some(token_balance_) => token_balance_,
@@ -1741,3 +1755,9 @@ impl StakePool {
 // написать методы для Михаила.
 // НАписать DecreaseValidatorStake.
 // TODO логировать
+
+// проверить, что у каждого свойства структуры есть инкремент и дикремент.
+
+// написать документацию.
+
+// Убрать ли везде Инфо?

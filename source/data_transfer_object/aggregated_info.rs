@@ -1,10 +1,10 @@
 use near_sdk::json_types::U128;
 use near_sdk::serde::{Deserialize, Serialize};
-use super::fee::Fee;
+use crate::fee::Fee;
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct AggregatedInformationDto {                                         // TODO ВСе ДТО ВЫНЕСТИ В модуль.
+pub struct AggregatedInfo {
     /// Near amount required for distribution on validators.
     pub unstaked_balance: U128,
     /// Near amount already distributed on validators.

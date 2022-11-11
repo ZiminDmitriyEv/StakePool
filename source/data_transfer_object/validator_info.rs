@@ -4,7 +4,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct ValidatorInfoDto {// TODO Переназвать. ВСе ДТО ВЫНЕСТИ В модуль.
+pub struct ValidatorInfo {
     pub account_id: AccountId,
     pub classic_staked_balance: U128,
     pub investment_staked_balance: U128,
