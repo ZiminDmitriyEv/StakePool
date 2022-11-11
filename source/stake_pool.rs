@@ -4,7 +4,6 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::aggregated_information_dto::AggregatedInformationDto;
 use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
-use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fungible_token::FungibleToken;
@@ -504,6 +503,32 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
+    fn internal_take_delayed_withdrawal(&mut self) -> Promise {
+        Self::assert_gas_is_enough();
+        self.assert_epoch_is_synchronized();
+
+        let predecessor_account_id = env::predecessor_account_id();
+
+        match self.management_fund.delayed_withdrawn_fund.account_registry.remove(&predecessor_account_id) {
+            Some(delayed_withdrawal_info) => {
+                if !delayed_withdrawal_info.can_take_delayed_withdrawal(self.current_epoch_height) {
+                    env::panic_str("Wrong epoch for withdrawal.");
+                }
+
+                self.management_fund.delayed_withdrawn_fund.balance -= delayed_withdrawal_info.near_amount;
+
+                let near_amount = delayed_withdrawal_info.near_amount +
+                    Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account);
+
+                Promise::new(predecessor_account_id)
+                    .transfer(near_amount)
+            }
+            None => {
+                env::panic_str("Delayed withdrawal account is not registered.");
+            }
+        }
+    }
+
     fn internal_increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: Balance) -> Promise {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
@@ -733,32 +758,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_take_delayed_withdrawal(&mut self) -> Promise {
-        Self::assert_gas_is_enough();
-        self.assert_epoch_is_synchronized();
-
-        let predecessor_account_id = env::predecessor_account_id();
-
-        match self.management_fund.delayed_withdrawn_fund.account_registry.remove(&predecessor_account_id) {
-            Some(delayed_withdrawal_info) => {
-                if (self.current_epoch_height - delayed_withdrawal_info.started_epoch_height) < EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL {
-                    env::panic_str("Wrong epoch for withdrawal.");
-                }
-
-                self.management_fund.delayed_withdrawn_fund.balance -= delayed_withdrawal_info.near_amount;
-
-                let near_amount = delayed_withdrawal_info.near_amount +
-                    Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account);
-
-                Promise::new(predecessor_account_id)
-                    .transfer(near_amount)
-            }
-            None => {
-                env::panic_str("Delayed withdrawal account is not registered.");
-            }
-        }
-    }
-
     fn internal_add_validator(&mut self, validator_account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion, is_preferred: bool) {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
@@ -933,6 +932,23 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.is_distributed_on_validators_in_current_epoch = true;
     }
 
+    pub fn internal_has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
+        self.assert_epoch_is_synchronized();
+
+        self.management_fund.delayed_withdrawn_fund.account_registry.contains_key(&account_id)
+    }
+
+    pub fn internal_get_epoch_quantity_to_take_delayed_withdrawal(&self, account_id: AccountId) -> u64 {
+        self.assert_epoch_is_synchronized();
+
+        match self.management_fund.delayed_withdrawn_fund.account_registry.get(&account_id) {
+            Some(delayed_withdrawal_info) => delayed_withdrawal_info.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+            None => {
+                env::panic_str("Delayed withdrawal account is not registered yet.");
+            }
+        }
+    }
+
     fn internal_is_token_account_registered(&self, account_id: AccountId) -> bool {
         self.fungible_token.account_registry.contains_key(&account_id)
     }
@@ -993,11 +1009,42 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_fee_registry(&self) -> FeeRegistry {
         self.assert_epoch_is_synchronized();
 
-        self.fee_registry.clone()       // TODO ВОт здесь нужен ли клон. Если не нужен, то убрать везде.
+        self.fee_registry.clone()
     }
 
     pub fn internal_get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
         (self.current_epoch_height, env::epoch_height())
+    }
+
+    pub fn internal_is_stake_distributed(&self) -> bool {
+        self.management_fund.is_distributed_on_validators_in_current_epoch
+    }
+
+    pub fn internal_is_investor(&self, account_id: AccountId) -> bool {
+        self.assert_epoch_is_synchronized();
+
+        self.validating_node.investor_registry.contains_key(&account_id)
+    }
+
+    pub fn internal_get_investor_investments(&self, account_id: AccountId) -> Vec<(AccountId, U128)> {
+        self.assert_epoch_is_synchronized();
+
+        let mut distribution_registry: Vec<(AccountId, U128)> = vec![];
+
+        let investor_info = match self.validating_node.investor_registry.get(&account_id) {
+            Some(investor_info_) => investor_info_,
+            None => {
+                env::panic_str("Investor account is not registered yet.");
+            }
+        };
+
+        for validator_account_id in self.validating_node.validator_registry.keys() {
+            if let Some(staked_balance) = investor_info.distribution_registry.get(&validator_account_id) {
+                distribution_registry.push((validator_account_id, staked_balance.into()));
+            }
+        }
+
+        distribution_registry
     }
 
     fn internal_get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> {
@@ -1043,9 +1090,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_requested_to_withdrawal_fund(&self) -> RequestedToWithdrawalFund {
         let mut investment_withdrawal_registry: Vec<(AccountId, U128)> = vec![];
 
-        for account_id in self.validating_node.validator_registry.keys() {
-            if let Some(investment_withdrawal_info) = self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&account_id) {
-                investment_withdrawal_registry.push((account_id, investment_withdrawal_info.near_amount.into()))
+        for validator_account_id in self.validating_node.validator_registry.keys() {
+            if let Some(investment_withdrawal_info) = self.management_fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+                investment_withdrawal_registry.push((validator_account_id, investment_withdrawal_info.near_amount.into()))
             }
         }
 
@@ -1130,6 +1177,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
 #[near_bindgen]
 impl StakePool {
+    /// Call-methods:
     #[init]
     pub fn new(
         manager_id: Option<AccountId>,
@@ -1180,6 +1228,10 @@ impl StakePool {
         self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id);
     }
 
+    pub fn take_delayed_withdrawal(&mut self) -> Promise {
+        self.internal_take_delayed_withdrawal()
+    }
+
     pub fn increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: U128) -> Promise {
         self.internal_increase_validator_stake(validator_account_id, near_amount.into())
     }
@@ -1204,10 +1256,6 @@ impl StakePool {
 
     pub fn update(&mut self) {
         self.internal_update();
-    }
-
-    pub fn take_delayed_withdrawal(&mut self) -> Promise {
-        self.internal_take_delayed_withdrawal()
     }
 
     #[payable]
@@ -1251,6 +1299,16 @@ impl StakePool {
 
     pub fn confirm_stake_distribution(&mut self) {
         self.internal_confirm_stake_distribution();
+    }
+
+    /// View-methods:
+
+    pub fn has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
+        self.internal_has_delayed_withdrawal(account_id)
+    }
+
+    pub fn get_epoch_quantity_to_take_delayed_withdrawal(&self, account_id: AccountId) -> u64 {
+        self.internal_get_epoch_quantity_to_take_delayed_withdrawal(account_id)
     }
 
     pub fn is_token_account_registered(&self, account_id: AccountId) -> bool {
@@ -1302,7 +1360,15 @@ impl StakePool {
     }
 
     pub fn is_stake_distributed(&self) -> bool {
-        self.management_fund.is_distributed_on_validators_in_current_epoch
+        self.internal_is_stake_distributed()
+    }
+
+    pub fn is_investor(&self, account_id: AccountId) -> bool {
+        self.internal_is_investor(account_id)
+    }
+
+    pub fn get_investor_investments(&self, account_id: AccountId) -> Vec<(AccountId, U128)> {
+        self.internal_get_investor_investments(account_id)
     }
 
     pub fn get_validator_info_dto(&self) -> Vec<ValidatorInfoDto> { // TODO есть Info , есть Information (проблема в имени)
