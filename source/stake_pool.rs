@@ -182,14 +182,6 @@ impl StakePool {
         self.internal_get_storage_staking_price()
     }
 
-    pub fn get_unstaked_balance(&self) -> U128 {
-        self.internal_get_unstaked_balance().into()
-    }
-
-    pub fn get_staked_balance(&self) -> U128 {
-        self.internal_get_staked_balance().into()
-    }
-
     pub fn get_management_fund(&self) -> (U128, U128) {
         self.internal_get_management_fund()
     }
@@ -837,7 +829,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Promise {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+    fn internal_take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Promise {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_desynchronized();
         self.assert_authorized_management_only_by_manager();
@@ -1179,18 +1171,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_token_amount_from_near_amount(&self, near_amount: Balance) -> Balance {
-        self.assert_epoch_is_synchronized();
-
-        self.convert_near_amount_to_token_amount(near_amount)
-    }
-
-    fn internal_get_near_amount_from_token_amount(&self, token_amount: Balance) -> Balance {
-        self.assert_epoch_is_synchronized();
-
-        self.convert_token_amount_to_near_amount(token_amount)
-    }
-
     fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128) {
         match self.fungible_token.account_registry.get(&account_id) {
             Some(token_balance) => (token_balance.into(), self.convert_token_amount_to_near_amount(token_balance).into()),
@@ -1198,18 +1178,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 env::panic_str("Token account is not registered yet.");
             }
         }
-    }
-
-    fn internal_get_unstaked_balance(&self) -> Balance {
-        self.assert_epoch_is_synchronized();
-
-        self.management_fund.unstaked_balance
-    }
-
-    fn internal_get_staked_balance(&self) -> Balance {
-        self.assert_epoch_is_synchronized();
-
-        self.management_fund.staked_balance
     }
 
     fn internal_get_management_fund(&self) -> (U128, U128) {
