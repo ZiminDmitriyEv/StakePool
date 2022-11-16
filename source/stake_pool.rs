@@ -1,5 +1,6 @@
 use core::convert::Into;
-use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas};
+use near_contract_standards::fungible_token::core::FungibleTokenCore;
+use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::cross_contract_call::validator::validator;
@@ -16,6 +17,7 @@ use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
 use super::investor_investment_info::InvestorInvestmentInfo;
 use super::management_fund::ManagementFund;
 use super::MAXIMUM_NUMBER_OF_TGAS;
+use super::MINIMUM_ATTACHED_DEPOSIT;
 use super::stake_decreasing_kind::StakeDecreasingType;
 use super::validating_node::ValidatingNode;
 use super::validator_info::ValidatorInfo;
@@ -24,6 +26,22 @@ use uint::construct_uint;
 
 construct_uint! {
     pub struct U256(4);
+}
+
+#[near_bindgen]
+#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить там, где Мэпы и сеты, посмотреть, где нужно !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+pub struct StakePool {      // TODO Можно перенести Структуру в место, где будут все структуры. А Функциональность оставить. Раз я решил делать Публичные поля
+    owner_id: AccountId,
+    manager_id: AccountId,
+    rewards_receiver_account_id: AccountId,
+    everstake_rewards_receiver_account_id: AccountId,
+    fungible_token: FungibleToken,
+    management_fund: ManagementFund,
+    fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
+    validating_node: ValidatingNode,
+    current_epoch_height: EpochHeight,
+    previous_epoch_rewards_from_validators_near_amount: Balance,       // TODO МОЖет, сделать через ПрошлыйКурс?
+    total_rewards_from_validators_near_amount: Balance,       // TODO Все, что связано с ревардс, перенести в структуру?
 }
 
 #[near_bindgen]
@@ -182,7 +200,7 @@ impl StakePool {
         self.internal_get_storage_staking_price()
     }
 
-    pub fn get_management_fund(&self) -> (U128, U128) {
+    pub fn get_management_fund(&self) -> (U128, U128, U128) {
         self.internal_get_management_fund()
     }
 
@@ -220,19 +238,30 @@ impl StakePool {
 }
 
 #[near_bindgen]
-#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить там, где Мэпы и сеты, посмотреть, где нужно !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-pub struct StakePool {      // TODO Можно перенести Структуру в место, где будут все структуры. А Функциональность оставить. Раз я решил делать Публичные поля
-    owner_id: AccountId,
-    manager_id: AccountId,
-    rewards_receiver_account_id: AccountId,
-    everstake_rewards_receiver_account_id: AccountId,
-    fungible_token: FungibleToken,
-    management_fund: ManagementFund,
-    fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
-    validating_node: ValidatingNode,
-    current_epoch_height: EpochHeight,
-    previous_epoch_rewards_from_validators_near_amount: Balance,       // TODO МОЖет, сделать через ПрошлыйКурс?
-    total_rewards_from_validators_near_amount: Balance,       // TODO Все, что связано с ревардс, перенести в структуру?
+impl FungibleTokenCore for StakePool {
+    #[payable]
+    fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, _memo: Option<String>) {
+        self.internal_ft_transfer(receiver_id, amount.into());
+    }
+
+    #[payable]
+    fn ft_transfer_call(
+        &mut self,
+        receiver_id: AccountId,
+        amount: U128,
+        memo: Option<String>,
+        msg: String,
+    ) -> PromiseOrValue<U128> {
+        todo!();
+    }
+
+    fn ft_total_supply(&self) -> U128 {
+        self.internal_ft_total_supply().into()
+    }
+
+    fn ft_balance_of(&self, account_id: AccountId) -> U128 {
+        self.internal_ft_balance_of(account_id).into()
+    }
 }
 
 impl StakePool {        // TODO TODO TODO добавить логи к каждой манипуляции с деньгами или event. Интерфейсы
@@ -977,7 +1006,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Validator account is already registered.");
         }
         self.validating_node.validators_quantity += 1;
-        self.validating_node.quantity_of_validators_updated_in_current_epoch += 1;     // TODO вот это точно ли нужно
 
         if is_preferred {
             self.validating_node.preffered_validtor = Some(validator_account_id);
@@ -1009,7 +1037,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.validating_node.validators_quantity -= 1;
-        self.validating_node.quantity_of_validators_updated_in_current_epoch -= 1;    // TODO  вот это точно ли нужно относительно internal_add_validator
 
         if let Some(ref preffered_validator_account_id) = self.validating_node.preffered_validtor {
             if *preffered_validator_account_id == validator_account_id {
@@ -1129,6 +1156,63 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.is_distributed_on_validators_in_current_epoch = true;
     }
 
+    fn internal_ft_transfer(&mut self, receiver_account_id: AccountId, token_amount: Balance) {     // TODO стоит ли удалять токен-аккаунт с нулевым балансом. Сейчас я его удаляю. нет механизма регистрации. Сейчас регистрируется тоько при депозите
+        Self::assert_gas_is_enough();
+
+        if token_amount == 0 {
+            env::panic_str("Insufficient token amount.");
+        }
+
+        let mut near_amount = env::attached_deposit();
+        if near_amount != MINIMUM_ATTACHED_DEPOSIT {
+            env::panic_str("Wrong attached deposit.");
+        }
+
+        let predecessor_account_id = env::predecessor_account_id();
+        let mut predecessor_account_token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(token_balance) => token_balance,
+            None => {
+                env::panic_str("Token account is not registered yet.");
+            }
+        };
+
+        let mut receiver_account_token_balance = match self.fungible_token.account_registry.get(&receiver_account_id) {
+            Some(token_balance) => token_balance,
+            None => {
+                env::panic_str("Token account is not registered yet.");
+            }
+        };
+
+        if predecessor_account_token_balance < token_amount {
+            env::panic_str("Token amount exceeded the available token balance.");
+        }
+
+        predecessor_account_token_balance -= token_amount;
+
+        if let Some(investor_investment_info) = self.validating_node.investor_investment_registry.get(&predecessor_account_id) {
+            if self.convert_token_amount_to_near_amount(predecessor_account_token_balance) < investor_investment_info.staked_balance {
+                env::panic_str("Token amount exceeded the available to transfer token amount.");
+            }
+        }
+
+        receiver_account_token_balance += token_amount;
+
+        if predecessor_account_token_balance > 0
+            || predecessor_account_id == self.rewards_receiver_account_id
+            || predecessor_account_id == self.everstake_rewards_receiver_account_id {                                           // TODO стоит ли записать здесь и везде два последних условия через метод
+            self.fungible_token.account_registry.insert(&predecessor_account_id, &predecessor_account_token_balance);
+        } else {
+            self.fungible_token.account_registry.remove(&predecessor_account_id);
+            self.fungible_token.accounts_quantity -= 1;
+
+            near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+        }
+        self.fungible_token.account_registry.insert(&receiver_account_id, &receiver_account_token_balance);
+
+        Promise::new(predecessor_account_id)
+            .transfer(near_amount);
+    }
+
     pub fn internal_has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
         self.assert_epoch_is_synchronized();
 
@@ -1180,10 +1264,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_management_fund(&self) -> (U128, U128) {
+    fn internal_get_management_fund(&self) -> (U128, U128, U128) {
         self.assert_epoch_is_synchronized();
 
-        (self.management_fund.unstaked_balance.into(), self.management_fund.staked_balance.into())
+        (
+            self.management_fund.unstaked_balance.into(),
+            self.management_fund.staked_balance.into(),
+            self.management_fund.get_management_fund_amount().into()
+        )
     }
 
     fn internal_get_fee_registry(&self) -> FeeRegistry {
@@ -1283,6 +1371,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             classic_near_amount: self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount.into(),
             investment_near_amount: self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount.into(),
             investment_withdrawal_registry
+        }
+    }
+
+    fn internal_ft_total_supply(&self) -> Balance {
+        self.fungible_token.total_supply
+    }
+
+    fn internal_ft_balance_of(&self, account_id: AccountId) -> Balance {
+        match self.fungible_token.account_registry.get(&account_id) {
+            Some(token_balance) => token_balance,
+            None => 0
         }
     }
 
@@ -1645,10 +1744,6 @@ impl StakePool {
     }
 }
 
-// TODO  Добавить к системным Промисам Коллбэк (логирование или подобное) ?
-
-// TODO проставить проверку по типу amount>0.
-
 // TODO Понять работу с аккаунтами. КОму пренадлжат, кто может мзенять состояние, и подобные вещи
 
 // #[ext_contract(ext_voting)]           что это такое???????????????????????????????????????????????
@@ -1661,6 +1756,7 @@ impl StakePool {
 
 //#[global_allocator]
 // static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;            Нужно ли вот это ??????????????????
+// near_sdk::setup_alloc!();
 
 
 // Returning Promise: This allows NEAR Explorer, near-cli, near-api-js, and other tooling to correctly determine if a whole chain of transactions
@@ -1712,8 +1808,6 @@ impl StakePool {
 
 // TODO TODO TODO TODO TODO Можно ли будет перейти на МУЛЬТИСИГ флоу управления после деплоя классического флоу управления.
 
-// написать методы для Михаила.
-// НАписать DecreaseValidatorStake.
 // TODO логировать
 
 // проверить, что у каждого свойства структуры есть инкремент и дикремент.
@@ -1721,3 +1815,25 @@ impl StakePool {
 // написать документацию.
 
 // Убрать ли везде Инфо?
+
+
+// https://nomicon.io/Standards  Евенты и подобное.
+
+
+
+// // use near_contract_standards::fungible_token::core::FungibleTokenCore;
+// use near_contract_standards::fungible_token::events  - посмотреть, какие нужны
+// use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
+// https://learn.figment.io/tutorials/stake-fungible-token
+
+// Нужна ли фабрика?
+
+// TODO проработать логи, то есть, втсавлять в них конкретные значения
+
+
+
+
+
+
+// НАписать DecreaseValidatorStake относительно менеджера, причем это не должно влиять на возможность снятия средств пользователями.
+// TODO PromiseOrValue<U128> сделать так
