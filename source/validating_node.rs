@@ -47,7 +47,7 @@ impl ValidatingNode {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         validator_registry.insert(
-            &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic)
+            &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic, false)
         );
 
         env::storage_usage() - initial_storage_usage

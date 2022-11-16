@@ -132,9 +132,18 @@ impl StakePool {
         &mut self,
         validator_account_id: AccountId,
         validator_staking_contract_version: ValidatorStakingContractVersion,
+        is_only_for_investment: bool,
         is_preferred: bool
     ) {
-        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_preferred);
+        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_only_for_investment, is_preferred);
+    }
+
+    pub fn change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool) {
+        self.internal_change_validator_investment_context(validator_account_id, is_only_for_investment);
+    }
+
+    pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
+        self.internal_change_preffered_validator(validator_account_id);
     }
 
     pub fn remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
@@ -160,10 +169,6 @@ impl StakePool {
 
     pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
         self.internal_change_everstake_rewards_fee(everstake_rewards_fee);
-    }
-
-    pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
-        self.internal_change_preffered_validator(validator_account_id);
     }
 
     pub fn confirm_stake_distribution(&mut self) {
@@ -770,7 +775,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         match self.validating_node.validator_registry.get(&validator_account_id) {
-            Some(validator_info) => {
+            Some(validator_info) => {                                                                       // TODO написать все везде в одном стиле let vi = match ... То есть, убрать вложенность там, где возможно
+                if validator_info.is_only_for_investment {
+                    env::panic_str("Validator is used only for investment purpose.");
+                }
+
                 match validator_info.staking_contract_version {
                     ValidatorStakingContractVersion::Classic => {
                         validator::ext(validator_account_id.clone())
@@ -984,7 +993,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_add_validator(&mut self, validator_account_id: AccountId, validator_staking_contract_version: ValidatorStakingContractVersion, is_preferred: bool) {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+    fn internal_add_validator(
+        &mut self,
+        validator_account_id: AccountId,
+        validator_staking_contract_version: ValidatorStakingContractVersion,
+        is_only_for_investment: bool,
+        is_preferred: bool
+    ) {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
@@ -1001,7 +1016,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         if let Some(_) = self.validating_node.validator_registry.insert(
-            &validator_account_id, &ValidatorInfo::new(validator_staking_contract_version)
+            &validator_account_id, &ValidatorInfo::new(validator_staking_contract_version, is_only_for_investment)
         ) {
             env::panic_str("Validator account is already registered.");
         }
@@ -1048,6 +1063,48 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         Promise::new(env::predecessor_account_id())
             .transfer(near_amount)
+    }
+
+    fn internal_change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool) {
+        Self::assert_gas_is_enough();
+        self.assert_epoch_is_synchronized();
+        self.assert_authorized_management_only_by_manager();
+
+        let mut validator_info = match self.validating_node.validator_registry.get(&validator_account_id) {
+            Some(validator_info_) => validator_info_,
+            None => {
+                env::panic_str("Validator account is not registered yet.");
+            }
+        };
+
+        if validator_info.is_only_for_investment == is_only_for_investment {
+            env::panic_str("Changing the state to the same state.");
+        }
+
+        validator_info.is_only_for_investment = is_only_for_investment;
+        self.validating_node.validator_registry.insert(&validator_account_id, &validator_info);
+    }
+
+    fn internal_change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
+        Self::assert_gas_is_enough();
+        self.assert_epoch_is_synchronized();
+        self.assert_authorized_management_only_by_manager();
+
+        match validator_account_id {
+            Some(validator_account_id_) => {
+                match self.validating_node.validator_registry.get(&validator_account_id_) {
+                    Some(_) => {
+                        self.validating_node.preffered_validtor = Some(validator_account_id_);
+                    }
+                    None => {
+                        env::panic_str("Validator account is not registered yet.");
+                    }
+                }
+            }
+            None => {
+                self.validating_node.preffered_validtor = None;
+            }
+        }
     }
 
     fn internal_add_investor(&mut self, investor_account_id: AccountId) {
@@ -1124,28 +1181,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fee_registry.everstake_rewards_fee = everstake_rewards_fee;
-    }
-
-    fn internal_change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
-        Self::assert_gas_is_enough();
-        self.assert_epoch_is_synchronized();
-        self.assert_authorized_management_only_by_manager();
-
-        match validator_account_id {
-            Some(validator_account_id_) => {
-                match self.validating_node.validator_registry.get(&validator_account_id_) {
-                    Some(_) => {
-                        self.validating_node.preffered_validtor = Some(validator_account_id_);
-                    }
-                    None => {
-                        env::panic_str("Validator account is not registered yet.");
-                    }
-                }
-            }
-            None => {
-                self.validating_node.preffered_validtor = None;
-            }
-        }
     }
 
     fn internal_confirm_stake_distribution(&mut self) {
@@ -1323,10 +1358,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         for (account_id, validator_info) in self.validating_node.validator_registry.into_iter() {
             let ValidatorInfo {
-                staking_contract_version: _,
-                unstaked_balance: _,
                 classic_staked_balance,
                 investment_staked_balance,
+                unstaked_balance,
+                staking_contract_version: _,
+                is_only_for_investment,
                 last_update_info_epoch_height,
                 last_classic_stake_increasing_epoch_height
             } = validator_info;
@@ -1336,6 +1372,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     account_id,
                     classic_staked_balance: classic_staked_balance.into(),
                     investment_staked_balance: investment_staked_balance.into(),
+                    unstaked_balance: unstaked_balance.into(),
+                    is_only_for_investment,
                     last_update_info_epoch_height,
                     last_stake_increasing_epoch_height: last_classic_stake_increasing_epoch_height
                 }
