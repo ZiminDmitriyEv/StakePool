@@ -86,15 +86,15 @@ impl StakePool {
 
     /// Delayed unstake process.
     #[payable]
-    pub fn delayed_withdraw(&mut self, token_amount: U128) {
-        self.internal_delayed_withdraw(token_amount.into());
+    pub fn delayed_withdraw(&mut self, token_amount: U128) -> PromiseOrValue<()> {
+        self.internal_delayed_withdraw(token_amount.into())
     }
 
     /// Delayed unstake process directly from validator
     /// Available only for Investor.
     #[payable]
-    pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
-        self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id);
+    pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) -> PromiseOrValue<()> {
+        self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id)
     }
 
     pub fn take_delayed_withdrawal(&mut self) -> Promise {
@@ -134,8 +134,8 @@ impl StakePool {
         validator_staking_contract_version: ValidatorStakingContractVersion,
         is_only_for_investment: bool,
         is_preferred: bool
-    ) {
-        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_only_for_investment, is_preferred);
+    ) -> PromiseOrValue<()> {
+        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_only_for_investment, is_preferred)
     }
 
     pub fn change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool) {
@@ -151,8 +151,8 @@ impl StakePool {
     }
 
     #[payable]
-    pub fn add_investor(&mut self, investor_account_id: AccountId) {
-        self.internal_add_investor(investor_account_id);
+    pub fn add_investor(&mut self, investor_account_id: AccountId) -> PromiseOrValue<()> {
+        self.internal_add_investor(investor_account_id)
     }
 
     pub fn remove_investor(&mut self, investor_account_id: AccountId) -> Promise {
@@ -520,7 +520,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             .transfer(near_amount)
     }
 
-    fn internal_delayed_withdraw(&mut self, token_amount: Balance) {
+    fn internal_delayed_withdraw(&mut self, token_amount: Balance) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -594,12 +594,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fungible_token.total_supply -= token_amount;
 
         if near_refundable_deposit > 0 {
-            Promise::new(predecessor_account_id)
-                .transfer(near_refundable_deposit);
+            return PromiseOrValue::Promise(
+                Promise::new(predecessor_account_id)
+                    .transfer(near_refundable_deposit)
+            );
         }
+
+        PromiseOrValue::Value(())
     }
 
-    fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) {
+    fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -729,9 +733,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fungible_token.total_supply -= token_amount;
 
         if near_refundable_deposit > 0 {
-            Promise::new(predecessor_account_id)
-                .transfer(near_refundable_deposit);
+            return PromiseOrValue::Promise(
+                Promise::new(predecessor_account_id)
+                    .transfer(near_refundable_deposit)
+            )
         }
+
+        PromiseOrValue::Value(())
     }
 
     fn internal_take_delayed_withdrawal(&mut self) -> Promise {
@@ -999,7 +1007,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_staking_contract_version: ValidatorStakingContractVersion,
         is_only_for_investment: bool,
         is_preferred: bool
-    ) {   // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+    ) -> PromiseOrValue<()> {                                                     // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
@@ -1028,9 +1036,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let near_amount = env::attached_deposit() - storage_staking_price_per_additional_validator_account;
         if near_amount > 0 {
-            Promise::new(env::predecessor_account_id())
-                .transfer(near_amount);   // TODO Нужен ли коллбек?
+            return PromiseOrValue::Promise(
+                Promise::new(env::predecessor_account_id())
+                    .transfer(near_amount)                                                                  // TODO Нужен ли коллбек?
+            );
         }
+
+        PromiseOrValue::Value(())
     }
 
     fn internal_remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
@@ -1107,7 +1119,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_add_investor(&mut self, investor_account_id: AccountId) {
+    fn internal_add_investor(&mut self, investor_account_id: AccountId) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
@@ -1125,9 +1137,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let near_amount = env::attached_deposit() - storage_staking_price_per_additional_investor_account;
         if near_amount > 0 {
-            Promise::new(env::predecessor_account_id())
-                .transfer(near_amount);
+            return PromiseOrValue::Promise(
+                Promise::new(env::predecessor_account_id())
+                    .transfer(near_amount)
+            );
         }
+
+        PromiseOrValue::Value(())
     }
 
     fn internal_remove_investor(&mut self, investor_account_id: AccountId) -> Promise {
@@ -1191,7 +1207,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.is_distributed_on_validators_in_current_epoch = true;
     }
 
-    fn internal_ft_transfer(&mut self, receiver_account_id: AccountId, token_amount: Balance) {     // TODO стоит ли удалять токен-аккаунт с нулевым балансом. Сейчас я его удаляю. нет механизма регистрации. Сейчас регистрируется тоько при депозите
+    fn internal_ft_transfer(&mut self, receiver_account_id: AccountId, token_amount: Balance) -> Promise {     // TODO стоит ли удалять токен-аккаунт с нулевым балансом. Сейчас я его удаляю. нет механизма регистрации. Сейчас регистрируется тоько при депозите
         Self::assert_gas_is_enough();
 
         if token_amount == 0 {
@@ -1245,7 +1261,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fungible_token.account_registry.insert(&receiver_account_id, &receiver_account_token_balance);
 
         Promise::new(predecessor_account_id)
-            .transfer(near_amount);
+            .transfer(near_amount)
     }
 
     pub fn internal_has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
@@ -1874,4 +1890,3 @@ impl StakePool {
 
 
 // НАписать DecreaseValidatorStake относительно менеджера, причем это не должно влиять на возможность снятия средств пользователями.
-// TODO PromiseOrValue<U128> сделать так
