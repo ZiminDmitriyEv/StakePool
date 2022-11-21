@@ -551,7 +551,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fund.staked_balance -= near_amount;
-        let mut near_refundable_deposit = match self.fund.delayed_withdrawn_fund.account_registry.insert(
+        let mut near_refundable_deposit = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawal {
                 near_amount,
@@ -682,7 +682,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fund.staked_balance -= near_amount;
-        match self.fund.delayed_withdrawn_fund.account_registry.insert(
+        match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawal {
                 near_amount,
@@ -754,7 +754,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        match self.fund.delayed_withdrawn_fund.account_registry.remove(&predecessor_account_id) {
+        match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.remove(&predecessor_account_id) {
             Some(delayed_withdrawal) => {
                 if !delayed_withdrawal.can_take_delayed_withdrawal(self.current_epoch_height) {
                     env::panic_str("Wrong epoch for withdrawal.");
@@ -1282,13 +1282,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     pub fn internal_has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
         self.assert_epoch_is_synchronized();
 
-        self.fund.delayed_withdrawn_fund.account_registry.contains_key(&account_id)
+        self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.contains_key(&account_id)
     }
 
     pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> (u64, U128) {
         self.assert_epoch_is_synchronized();
 
-        match self.fund.delayed_withdrawn_fund.account_registry.get(&account_id) {
+        match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&account_id) {
             Some(delayed_withdrawal) =>
                 (delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height), delayed_withdrawal.near_amount.into()),
             None => {

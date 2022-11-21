@@ -10,7 +10,7 @@ use super::storage_key::StorageKey;
 pub struct DelayedWithdrawnFund {
     /// Storage.
     /// AccountId - user account id.
-    pub account_registry: LookupMap<AccountId, DelayedWithdrawal>,
+    pub delayed_withdrawal_registry: LookupMap<AccountId, DelayedWithdrawal>,
     /// Storage
     /// AccountId - validator account id.
     /// Balance - near amount.
@@ -30,7 +30,7 @@ pub struct DelayedWithdrawnFund {
 impl DelayedWithdrawnFund {
     pub fn new() -> Self {
         Self {
-            account_registry: Self::initialize_account_registry(),
+            delayed_withdrawal_registry: Self::initialize_delayed_withdrawal_registry(),
             investment_withdrawal_registry: Self::initialize_investment_withdrawal_registry(),
             needed_to_request_classic_near_amount: 0,
             needed_to_request_investment_near_amount: 0,
@@ -41,13 +41,13 @@ impl DelayedWithdrawnFund {
     }
 
     fn calculate_storage_usage_per_additional_account() -> StorageUsage {
-        let mut account_registry = Self::initialize_account_registry();
+        let mut delayed_withdrawal_registry = Self::initialize_delayed_withdrawal_registry();
 
         let initial_storage_usage = env::storage_usage();
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        account_registry.insert(
+        delayed_withdrawal_registry.insert(
             &account_id,
             &DelayedWithdrawal {
                 near_amount: 0,
@@ -76,7 +76,7 @@ impl DelayedWithdrawnFund {
         env::storage_usage() - initial_storage_usage
     }
 
-    fn initialize_account_registry() -> LookupMap<AccountId, DelayedWithdrawal> {
+    fn initialize_delayed_withdrawal_registry() -> LookupMap<AccountId, DelayedWithdrawal> {
         LookupMap::new(StorageKey::DelayedWithdrawnFund)
     }
 
