@@ -2,14 +2,14 @@ use near_sdk::Balance;
 
 pub(crate) mod cross_contract_call;
 pub(crate) mod data_transfer_object;
-pub(crate) mod delayed_withdrawal_info;
+pub(crate) mod delayed_withdrawal;
 pub(crate) mod delayed_withdrawn_fund;
 pub(crate) mod fee_registry;
 pub(crate) mod fee;
 pub(crate) mod fund;
 pub(crate) mod fungible_token_metadata;
 pub(crate) mod fungible_token;
-pub(crate) mod investment_withdrawal_info;
+pub(crate) mod investment_withdrawal;
 pub(crate) mod investor_investment;
 pub mod stake_pool;
 pub(crate) mod stake_decreasing_kind;

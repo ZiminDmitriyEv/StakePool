@@ -3,7 +3,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct DelayedWithdrawalInfo {
+pub struct DelayedWithdrawal {
     /// Near balance that the user requested to withdraw.
     pub near_amount: Balance,
     /// It is only needed in order to understand when it is possible to give
@@ -12,7 +12,7 @@ pub struct DelayedWithdrawalInfo {
     pub started_epoch_height: EpochHeight
 }
 
-impl DelayedWithdrawalInfo {
+impl DelayedWithdrawal {
     pub fn get_epoch_quantity_to_take_delayed_withdrawal(&self, current_epoch_height: EpochHeight) -> u64 {
         if current_epoch_height < self.started_epoch_height {
             env::panic_str("Current epoch height must be greater or equal to started epoch height.");

@@ -9,12 +9,12 @@ use super::data_transfer_object::investor_investment_info::InvestorInvestmentInf
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
 use super::data_transfer_object::validator_info::ValidatorInfo;
-use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
+use super::delayed_withdrawal::DelayedWithdrawal;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fund::Fund;
 use super::fungible_token::FungibleToken;
-use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
+use super::investment_withdrawal::InvestmentWithdrawal;
 use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::MINIMUM_ATTACHED_DEPOSIT;
@@ -553,7 +553,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fund.staked_balance -= near_amount;
         let mut near_refundable_deposit = match self.fund.delayed_withdrawn_fund.account_registry.insert(
             &predecessor_account_id,
-            &DelayedWithdrawalInfo {
+            &DelayedWithdrawal {
                 near_amount,
                 started_epoch_height: env::epoch_height()
             }
@@ -641,9 +641,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Near amount exceeded the available investor near balance on validator.");
         }
 
-        let (mut near_refundable_deposit, mut investment_withdrawal_info) =
+        let (mut near_refundable_deposit, mut investment_withdrawal) =
             match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
-            Some(investment_withdrawal_info_) => (env::attached_deposit(), investment_withdrawal_info_),
+            Some(investment_withdrawal_) => (env::attached_deposit(), investment_withdrawal_),
             None => {
                 let near_deposit = env::attached_deposit();
 
@@ -655,14 +655,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
                 (
                     near_deposit - storage_staking_price_per_additional_investment_withdrawal,
-                    InvestmentWithdrawalInfo {
+                    InvestmentWithdrawal {
                         near_amount: 0,
                         account_id: predecessor_account_id.clone()
                     }
                 )
             }
         };
-        if near_amount > (validator.investment_staked_balance - investment_withdrawal_info.near_amount) {
+        if near_amount > (validator.investment_staked_balance - investment_withdrawal.near_amount) {
             env::panic_str("Near amount exceeded the available near balance on validator.");
         }
 
@@ -684,7 +684,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fund.staked_balance -= near_amount;
         match self.fund.delayed_withdrawn_fund.account_registry.insert(
             &predecessor_account_id,
-            &DelayedWithdrawalInfo {
+            &DelayedWithdrawal {
                 near_amount,
                 started_epoch_height: env::epoch_height()
             }
@@ -702,8 +702,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
-        investment_withdrawal_info.near_amount += near_amount;
-        self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal_info);
+        investment_withdrawal.near_amount += near_amount;
+        self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal);
         self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount += near_amount;
 
         if near_amount < staked_balance {
@@ -755,14 +755,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let predecessor_account_id = env::predecessor_account_id();
 
         match self.fund.delayed_withdrawn_fund.account_registry.remove(&predecessor_account_id) {
-            Some(delayed_withdrawal_info) => {
-                if !delayed_withdrawal_info.can_take_delayed_withdrawal(self.current_epoch_height) {
+            Some(delayed_withdrawal) => {
+                if !delayed_withdrawal.can_take_delayed_withdrawal(self.current_epoch_height) {
                     env::panic_str("Wrong epoch for withdrawal.");
                 }
 
-                self.fund.delayed_withdrawn_fund.balance -= delayed_withdrawal_info.near_amount;
+                self.fund.delayed_withdrawn_fund.balance -= delayed_withdrawal.near_amount;
 
-                let near_amount = delayed_withdrawal_info.near_amount
+                let near_amount = delayed_withdrawal.near_amount
                     + Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_account)
                     + attached_deposit;
 
@@ -854,13 +854,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     env::panic_str("Near amount is more than requested near amount.");
                 }
 
-                let investment_withdrawal_info = match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
-                    Some(investment_withdrawal_info_) => investment_withdrawal_info_,
+                let investment_withdrawal = match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+                    Some(investment_withdrawal_) => investment_withdrawal_,
                     None => {
                         env::panic_str("Investment withdrawal account is not registered yet.");
                     }
                 };
-                if near_amount > investment_withdrawal_info.near_amount {
+                if near_amount > investment_withdrawal.near_amount {
                     env::panic_str("Near amount is more than requested near amount from validator.");
                 }
             }
@@ -1289,8 +1289,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
 
         match self.fund.delayed_withdrawn_fund.account_registry.get(&account_id) {
-            Some(delayed_withdrawal_info) =>
-                (delayed_withdrawal_info.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height), delayed_withdrawal_info.near_amount.into()),
+            Some(delayed_withdrawal) =>
+                (delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height), delayed_withdrawal.near_amount.into()),
             None => {
                 env::panic_str("Delayed withdrawal account is not registered yet.");
             }
@@ -1445,8 +1445,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let mut investment_withdrawal_registry: Vec<(AccountId, U128)> = vec![];
 
         for validator_account_id in self.validating.validator_registry.keys() {
-            if let Some(investment_withdrawal_info) = self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
-                investment_withdrawal_registry.push((validator_account_id, investment_withdrawal_info.near_amount.into()))
+            if let Some(investment_withdrawal) = self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+                investment_withdrawal_registry.push((validator_account_id, investment_withdrawal.near_amount.into()))
             }
         }
 
@@ -1716,20 +1716,20 @@ impl StakePool {
                         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount -= near_amount;
                     }
                     StakeDecreasingType::Investment => {
-                        let mut investment_withdrawal_info = match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
-                            Some(investment_withdrawal_info_) => investment_withdrawal_info_,
+                        let mut investment_withdrawal = match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+                            Some(investment_withdrawal_) => investment_withdrawal_,
                             None => {
                                 env::panic_str("Nonexecutable code. Account must exist.");
                             }
                         };
-                        if near_amount < investment_withdrawal_info.near_amount {
-                            investment_withdrawal_info.near_amount -= near_amount;
+                        if near_amount < investment_withdrawal.near_amount {
+                            investment_withdrawal.near_amount -= near_amount;
 
-                            self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal_info);
+                            self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal);
                         } else {
                             self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.remove(&validator_account_id);
 
-                            Promise::new(investment_withdrawal_info.account_id)
+                            Promise::new(investment_withdrawal.account_id)
                                 .transfer(refundable_near_amount);
                         }
 

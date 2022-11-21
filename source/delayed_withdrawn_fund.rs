@@ -1,8 +1,8 @@
 use near_sdk::{Balance, AccountId, env, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::LookupMap;
-use super::delayed_withdrawal_info::DelayedWithdrawalInfo;
-use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
+use super::delayed_withdrawal::DelayedWithdrawal;
+use super::investment_withdrawal::InvestmentWithdrawal;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 
@@ -10,11 +10,11 @@ use super::storage_key::StorageKey;
 pub struct DelayedWithdrawnFund {
     /// Storage.
     /// AccountId - user account id.
-    pub account_registry: LookupMap<AccountId, DelayedWithdrawalInfo>,
+    pub account_registry: LookupMap<AccountId, DelayedWithdrawal>,
     /// Storage
     /// AccountId - validator account id.
     /// Balance - near amount.
-    pub investment_withdrawal_registry: LookupMap<AccountId, InvestmentWithdrawalInfo>,
+    pub investment_withdrawal_registry: LookupMap<AccountId, InvestmentWithdrawal>,
     /// Classic near amount to be requested from the validator.
     pub needed_to_request_classic_near_amount: Balance,
     /// Investment near amount to be requested from the validator.
@@ -49,7 +49,7 @@ impl DelayedWithdrawnFund {
 
         account_registry.insert(
             &account_id,
-            &DelayedWithdrawalInfo {
+            &DelayedWithdrawal {
                 near_amount: 0,
                 started_epoch_height: env::epoch_height()
             }
@@ -67,7 +67,7 @@ impl DelayedWithdrawnFund {
 
         investment_withdrawal_registry.insert(
             &account_id,
-            &InvestmentWithdrawalInfo {
+            &InvestmentWithdrawal {
                 near_amount: 0,
                 account_id: account_id.clone()
             }
@@ -76,11 +76,11 @@ impl DelayedWithdrawnFund {
         env::storage_usage() - initial_storage_usage
     }
 
-    fn initialize_account_registry() -> LookupMap<AccountId, DelayedWithdrawalInfo> {
+    fn initialize_account_registry() -> LookupMap<AccountId, DelayedWithdrawal> {
         LookupMap::new(StorageKey::DelayedWithdrawnFund)
     }
 
-    fn initialize_investment_withdrawal_registry() -> LookupMap<AccountId, InvestmentWithdrawalInfo> {
+    fn initialize_investment_withdrawal_registry() -> LookupMap<AccountId, InvestmentWithdrawal> {
         LookupMap::new(StorageKey::InvestmentWithdrawalRegisry)
     }
 }
