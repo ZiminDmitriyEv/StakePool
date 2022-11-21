@@ -4,12 +4,12 @@ use near_sdk::collections::{UnorderedMap, LookupMap};
 use super::investor_investment_info::InvestorInvestmentInfo;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
-use super::validator_info::ValidatorInfo;
+use super::validator::Validator;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct ValidatingNode {
-    pub validator_registry: UnorderedMap<AccountId, ValidatorInfo>,
+    pub validator_registry: UnorderedMap<AccountId, Validator>,
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
     pub investor_investment_registry: LookupMap<AccountId, InvestorInvestmentInfo>,
     pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
@@ -47,7 +47,7 @@ impl ValidatingNode {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         validator_registry.insert(
-            &account_id, &ValidatorInfo::new(ValidatorStakingContractVersion::Classic, false)
+            &account_id, &Validator::new(ValidatorStakingContractVersion::Classic, false)
         );
 
         env::storage_usage() - initial_storage_usage
@@ -58,7 +58,7 @@ impl ValidatingNode {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));           // TODO эту строку через функцию
 
         investor_registry.insert(&account_id, &InvestorInvestmentInfo::new(account_id.clone()));
 
@@ -77,7 +77,7 @@ impl ValidatingNode {
         env::storage_usage() - initial_storage_usage
     }
 
-    fn initialize_validator_registry() -> UnorderedMap<AccountId, ValidatorInfo> {
+    fn initialize_validator_registry() -> UnorderedMap<AccountId, Validator> {
         UnorderedMap::new(StorageKey::ValidatorRegistry)
     }
 

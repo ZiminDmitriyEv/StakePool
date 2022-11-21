@@ -15,8 +15,8 @@ pub mod stake_pool;
 pub(crate) mod stake_decreasing_kind;
 pub(crate) mod storage_key;
 pub(crate) mod validating_node;
-pub(crate) mod validator_info;
 pub(crate) mod validator_staking_contract_version;
+pub(crate) mod validator;
 
 pub const EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL: u64 = 8;
 pub const MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;

@@ -3,7 +3,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct ValidatorInfo {
+pub struct Validator {
     pub classic_staked_balance: Balance,
     pub investment_staked_balance: Balance,
     pub unstaked_balance: Balance,
@@ -20,7 +20,7 @@ pub struct ValidatorInfo {
     pub last_classic_stake_increasing_epoch_height: Option<EpochHeight>
 }
 
-impl ValidatorInfo {
+impl Validator {
     pub fn new(
         validator_staking_contract_version: ValidatorStakingContractVersion,
         is_only_for_investment: bool
