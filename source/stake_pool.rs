@@ -189,7 +189,7 @@ impl StakePool {
         self.internal_is_account_registered(account_id)
     }
 
-    pub fn get_account_balance(&self, account_id: AccountId) -> (U128, U128) {
+    pub fn get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128) {
         self.internal_get_account_balance(account_id)
     }
 
@@ -1315,13 +1315,26 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128) {
-        match self.fungible_token.account_registry.get(&account_id) {
-            Some(token_balance) => (token_balance.into(), self.convert_token_amount_to_near_amount(token_balance).into()),
+    fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128) {
+        let token_balance = match self.fungible_token.account_registry.get(&account_id) {
+            Some(token_balance_) => token_balance_,
             None => {
                 env::panic_str("Token account is not registered yet.");
             }
+        };
+
+        let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
+
+        let investment_near_balance = match self.validating_node.investor_investment_registry.get(&account_id) {
+            Some(investor_investment_info_) => investor_investment_info_.staked_balance,
+            None => 0
+        };
+
+        if common_near_balance < investment_near_balance {
+            env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
         }
+
+        (token_balance.into(), (common_near_balance - investment_near_balance).into(), investment_near_balance.into())
     }
 
     fn internal_get_management_fund(&self) -> (U128, U128, U128) {
