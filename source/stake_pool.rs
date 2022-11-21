@@ -20,7 +20,7 @@ use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::MINIMUM_ATTACHED_DEPOSIT;
 use super::stake_decreasing_kind::StakeDecreasingType;
 use super::validating::Validating;
-use super::validator_staking_contract_version::ValidatorStakingContractVersion;
+use super::staking_contract_version::StakingContractVersion;
 use super::validator::Validator;
 use uint::construct_uint;
 
@@ -38,7 +38,7 @@ pub struct StakePool {      // TODO Можно перенести Структу
     fungible_token: FungibleToken,
     fund: Fund,
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
-    validating: Validating,
+    validating: Validating,             // TODO как назвать это поле.
     current_epoch_height: EpochHeight,
     previous_epoch_rewards_from_validators_near_amount: Balance,       // TODO МОЖет, сделать через ПрошлыйКурс?
     total_rewards_from_validators_near_amount: Balance,       // TODO Все, что связано с ревардс, перенести в структуру?
@@ -132,11 +132,11 @@ impl StakePool {
     pub fn add_validator(
         &mut self,
         validator_account_id: AccountId,
-        validator_staking_contract_version: ValidatorStakingContractVersion,
+        staking_contract_version: StakingContractVersion,
         is_only_for_investment: bool,
         is_preferred: bool
     ) -> PromiseOrValue<()> {
-        self.internal_add_validator(validator_account_id, validator_staking_contract_version, is_only_for_investment, is_preferred)
+        self.internal_add_validator(validator_account_id, staking_contract_version, is_only_for_investment, is_preferred)
     }
 
     pub fn change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool) {
@@ -359,7 +359,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     match self.validating.validator_registry.get(preffered_validator_account_id) {
                         Some(validator) => {
                             match validator.staking_contract_version {
-                                ValidatorStakingContractVersion::Classic => {
+                                StakingContractVersion::Classic => {
                                     validator::ext(preffered_validator_account_id.clone())
                                         .with_attached_deposit(near_amount)
                                         // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
@@ -449,7 +449,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         match validator.staking_contract_version {
-            ValidatorStakingContractVersion::Classic => {
+            StakingContractVersion::Classic => {
                 validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
                     // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
@@ -796,7 +796,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 }
 
                 match validator.staking_contract_version {
-                    ValidatorStakingContractVersion::Classic => {
+                    StakingContractVersion::Classic => {
                         validator::ext(validator_account_id.clone())
                             .with_attached_deposit(near_amount)
                             // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
@@ -867,7 +867,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         match validator.staking_contract_version {
-            ValidatorStakingContractVersion::Classic => {
+            StakingContractVersion::Classic => {
                 validator::ext(validator_account_id.clone())
                     // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                     .unstake(near_amount.into())
@@ -905,7 +905,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 }
 
                 match validator.staking_contract_version {
-                    ValidatorStakingContractVersion::Classic => {
+                    StakingContractVersion::Classic => {
                         validator::ext(validator_account_id.clone())
                             // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                             .withdraw(validator.unstaked_balance.into())
@@ -933,7 +933,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
                 if validator.last_update_info_epoch_height < current_epoch_height {
                     match validator.staking_contract_version {
-                        ValidatorStakingContractVersion::Classic => {
+                        StakingContractVersion::Classic => {
                             return validator::ext(validator_account_id.clone())
                                 // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                 .get_account_staked_balance(env::current_account_id())
@@ -1019,7 +1019,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_add_validator(
         &mut self,
         validator_account_id: AccountId,
-        validator_staking_contract_version: ValidatorStakingContractVersion,
+        staking_contract_version: StakingContractVersion,
         is_only_for_investment: bool,
         is_preferred: bool
     ) -> PromiseOrValue<()> {                                                     // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
@@ -1039,7 +1039,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         if let Some(_) = self.validating.validator_registry.insert(
-            &validator_account_id, &Validator::new(validator_staking_contract_version, is_only_for_investment)
+            &validator_account_id, &Validator::new(staking_contract_version, is_only_for_investment)
         ) {
             env::panic_str("Validator account is already registered.");
         }

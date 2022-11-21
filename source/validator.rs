@@ -1,13 +1,13 @@
 use near_sdk::{env, EpochHeight, Balance};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use super::validator_staking_contract_version::ValidatorStakingContractVersion;
+use super::staking_contract_version::StakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Validator {
     pub classic_staked_balance: Balance,
     pub investment_staked_balance: Balance,
     pub unstaked_balance: Balance,
-    pub staking_contract_version: ValidatorStakingContractVersion,
+    pub staking_contract_version: StakingContractVersion,
     /// Validator, which is needed ONLY for investment purpose.
     /// The pool should not distribute unstaked balance to validators with a TRUE value,
     /// and this means, that classic staked balance must always be equal to zero and investment
@@ -22,14 +22,14 @@ pub struct Validator {
 
 impl Validator {
     pub fn new(
-        validator_staking_contract_version: ValidatorStakingContractVersion,
+        staking_contract_version: StakingContractVersion,
         is_only_for_investment: bool
     ) -> Self {
         Self {
             classic_staked_balance: 0,
             investment_staked_balance: 0,
             unstaked_balance: 0,
-            staking_contract_version: validator_staking_contract_version,
+            staking_contract_version,
             is_only_for_investment,
             last_update_info_epoch_height: env::epoch_height(),
             last_classic_stake_increasing_epoch_height: None

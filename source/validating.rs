@@ -5,7 +5,7 @@ use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 use super::validator::Validator;
-use super::validator_staking_contract_version::ValidatorStakingContractVersion;
+use super::staking_contract_version::StakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Validating {
@@ -47,7 +47,7 @@ impl Validating {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         validator_registry.insert(
-            &account_id, &Validator::new(ValidatorStakingContractVersion::Classic, false)
+            &account_id, &Validator::new(StakingContractVersion::Classic, false)
         );
 
         env::storage_usage() - initial_storage_usage

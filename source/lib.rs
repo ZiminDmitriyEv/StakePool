@@ -13,9 +13,9 @@ pub(crate) mod investment_withdrawal;
 pub(crate) mod investor_investment;
 pub mod stake_pool;
 pub(crate) mod stake_decreasing_kind;
+pub(crate) mod staking_contract_version;
 pub(crate) mod storage_key;
 pub(crate) mod validating;
-pub(crate) mod validator_staking_contract_version;
 pub(crate) mod validator;
 
 pub const EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL: u64 = 8;

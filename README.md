@@ -108,7 +108,7 @@ Adds the validator to the list of validators to which the pool delegates the ava
 pub fn add_validator(
     &mut self,
     account_id: AccountId,
-    validator_staking_contract_version: ValidatorStakingContractVersion,
+    staking_contract_version: ValidatorStakingContractVersion,
     delayed_withdrawal_validator_group: DelayedWithdrawalValidatorGroup
 )
 ```
@@ -383,7 +383,7 @@ near deploy --wasmFile=./target/wasm32-unknown-unknown/release/stake_pool.wasm -
 ```
 
 ```bash
-near call stake.pool.testnet add_validator '{"account_id":"_","validator_staking_contract_version":"_", "delayed_withdrawal_validator_group":"_" }' --accountId=manager.testnet --deposit=1
+near call stake.pool.testnet add_validator '{"account_id":"_","staking_contract_version":"_", "delayed_withdrawal_validator_group":"_" }' --accountId=manager.testnet --deposit=1
 ```
 
 ```bash
