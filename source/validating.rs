@@ -8,7 +8,7 @@ use super::validator::Validator;
 use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct ValidatingNode {
+pub struct Validating {
     pub validator_registry: UnorderedMap<AccountId, Validator>,
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
     pub investor_investment_registry: LookupMap<AccountId, InvestorInvestmentInfo>,
@@ -19,12 +19,12 @@ pub struct ValidatingNode {
     /// In bytes.
     pub storage_usage_per_validator: StorageUsage,
     /// In bytes.
-    pub storage_usage_per_investor: StorageUsage,
+    pub storage_usage_per_investor_investment: StorageUsage,
     /// In bytes.
     pub storage_usage_per_distribution: StorageUsage
 }
 
-impl ValidatingNode {
+impl Validating {
     pub fn new(validators_maximum_quantity: Option<u64>) -> Self {
         Self {
             validator_registry: Self::initialize_validator_registry(),
@@ -34,7 +34,7 @@ impl ValidatingNode {
             preffered_validtor: None,
             quantity_of_validators_updated_in_current_epoch: 0,
             storage_usage_per_validator: Self::calculate_storage_usage_per_additional_validator(),
-            storage_usage_per_investor: Self::calculate_storage_usage_per_additional_investor_investment(),
+            storage_usage_per_investor_investment: Self::calculate_storage_usage_per_additional_investor_investment(),
             storage_usage_per_distribution: Self::calculate_storage_usage_per_additional_distribution()
         }
     }
