@@ -10,7 +10,7 @@ pub(crate) mod fund;
 pub(crate) mod fungible_token_metadata;
 pub(crate) mod fungible_token;
 pub(crate) mod investment_withdrawal_info;
-pub(crate) mod investor_investment_info;
+pub(crate) mod investor_investment;
 pub mod stake_pool;
 pub(crate) mod stake_decreasing_kind;
 pub(crate) mod storage_key;

@@ -5,7 +5,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::cross_contract_call::validator::validator;
 use super::data_transfer_object::aggregated_info::AggregatedInfo;
-use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfoDto;
+use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfo;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
 use super::data_transfer_object::validator_info::ValidatorInfo;
@@ -15,7 +15,7 @@ use super::fee::Fee;
 use super::fund::Fund;
 use super::fungible_token::FungibleToken;
 use super::investment_withdrawal_info::InvestmentWithdrawalInfo;
-use super::investor_investment_info::InvestorInvestmentInfo;
+use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::MINIMUM_ATTACHED_DEPOSIT;
 use super::stake_decreasing_kind::StakeDecreasingType;
@@ -226,7 +226,7 @@ impl StakePool {
         self.internal_is_investor(account_id)
     }
 
-    pub fn get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfoDto {
+    pub fn get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfo {
         self.internal_get_investor_investment_info(account_id)
     }
 
@@ -418,13 +418,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let mut storage_staking_price_per_additional_accounts: Balance = 0;
 
-        let investor_investment_info = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            Some(investor_investment_info_) => investor_investment_info_,
+        let investor_investment = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
+            Some(investor_investment_) => investor_investment_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
-        if let None = investor_investment_info.distribution_registry.get(&validator_account_id) {
+        if let None = investor_investment.distribution_registry.get(&validator_account_id) {
             storage_staking_price_per_additional_accounts += Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
         }
 
@@ -499,8 +499,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fund.unstaked_balance -= near_amount;
 
         token_balance -= token_amount;
-        if let Some(investor_investment_info) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment_info.staked_balance {
+        if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
+            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to instant withdraw token amount.");
             }
         }
@@ -576,8 +576,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
         token_balance -= token_amount;
-        if let Some(investor_investment_info) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment_info.staked_balance {
+        if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
+            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to delayed withdraw token amount.");
             }
         }
@@ -624,14 +624,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut investor_investment_info = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            Some(investor_investment_info_) => investor_investment_info_,
+        let mut investor_investment = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
+            Some(investor_investment_) => investor_investment_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
 
-        let mut staked_balance = match investor_investment_info.distribution_registry.get(&validator_account_id) {
+        let mut staked_balance = match investor_investment.distribution_registry.get(&validator_account_id) {
             Some(staked_balance_) => staked_balance_,
             None => {
                 env::panic_str("There is no investor stake on this validator.");
@@ -709,15 +709,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount < staked_balance {
             staked_balance -= near_amount;
 
-            investor_investment_info.distribution_registry.insert(&validator_account_id, &staked_balance);
+            investor_investment.distribution_registry.insert(&validator_account_id, &staked_balance);
         } else {
-            investor_investment_info.distribution_registry.remove(&validator_account_id);
-            investor_investment_info.distributions_quantity -= 1;
+            investor_investment.distribution_registry.remove(&validator_account_id);
+            investor_investment.distributions_quantity -= 1;
 
             near_refundable_deposit += Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
         }
-        investor_investment_info.staked_balance -= near_amount;
-        self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment_info);
+        investor_investment.staked_balance -= near_amount;
+        self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment);
 
         token_balance -= token_amount;
         if token_balance > 0
@@ -1145,7 +1145,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         if let Some(_) = self.validating.investor_investment_registry.insert(
-            &investor_account_id, &InvestorInvestmentInfo::new(investor_account_id.clone())
+            &investor_account_id, &InvestorInvestment::new(investor_account_id.clone())
         ) {
             env::panic_str("Investor account is already registered.");
         }
@@ -1166,13 +1166,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
-        let investor_investment_info = match self.validating.investor_investment_registry.remove(&investor_account_id) {  // TODO TODO TODO TODO TODO Обратить внимание, что на постоянное количество инвестмент токенов приходится увеличивающееся количество неара, но инвестмент баланс зафиксирован.
-            Some(investor_investment_info_) => investor_investment_info_,
+        let investor_investment = match self.validating.investor_investment_registry.remove(&investor_account_id) {  // TODO TODO TODO TODO TODO Обратить внимание, что на постоянное количество инвестмент токенов приходится увеличивающееся количество неара, но инвестмент баланс зафиксирован.
+            Some(investor_investment_) => investor_investment_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
-        if investor_investment_info.staked_balance > 0 || investor_investment_info.distributions_quantity > 0 {
+        if investor_investment.staked_balance > 0 || investor_investment.distributions_quantity > 0 {
             env::panic_str("Validator has an available balance.");
         }
 
@@ -1255,8 +1255,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         predecessor_account_token_balance -= token_amount;
 
-        if let Some(investor_investment_info) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(predecessor_account_token_balance) < investor_investment_info.staked_balance {
+        if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
+            if self.convert_token_amount_to_near_amount(predecessor_account_token_balance) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to transfer token amount.");
             }
         }
@@ -1333,7 +1333,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
 
         let investment_near_balance = match self.validating.investor_investment_registry.get(&account_id) {
-            Some(investor_investment_info_) => investor_investment_info_.staked_balance,
+            Some(investor_investment) => investor_investment.staked_balance,
             None => 0
         };
 
@@ -1374,27 +1374,27 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.validating.investor_investment_registry.contains_key(&account_id)
     }
 
-    pub fn internal_get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfoDto {
+    pub fn internal_get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfo {
         self.assert_epoch_is_synchronized();
 
         let mut distribution_registry: Vec<(AccountId, U128)> = vec![];
 
-        let investor_investment_info = match self.validating.investor_investment_registry.get(&account_id) {
-            Some(investor_investment_info_) => investor_investment_info_,
+        let investor_investment = match self.validating.investor_investment_registry.get(&account_id) {
+            Some(investor_investment_) => investor_investment_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
 
         for validator_account_id in self.validating.validator_registry.keys() {
-            if let Some(staked_balance) = investor_investment_info.distribution_registry.get(&validator_account_id) {
+            if let Some(staked_balance) = investor_investment.distribution_registry.get(&validator_account_id) {
                 distribution_registry.push((validator_account_id, staked_balance.into()));
             }
         }
 
-        InvestorInvestmentInfoDto {
+        InvestorInvestmentInfo {
             distribution_registry,
-            staked_balance: investor_investment_info.staked_balance.into()
+            staked_balance: investor_investment.staked_balance.into()
         }
     }
 
@@ -1610,24 +1610,24 @@ impl StakePool {
                 validator.investment_staked_balance += near_amount;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
-                let mut investor_investment_info = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
-                    Some(investor_investment_info_) => investor_investment_info_,
+                let mut investor_investment = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
+                    Some(investor_investment_) => investor_investment_,
                     None => {
                         env::panic_str("Nonexecutable code. Account must exist.");
                     }
                 };
-                let mut staked_balance = match investor_investment_info.distribution_registry.get(&validator_account_id) {
+                let mut staked_balance = match investor_investment.distribution_registry.get(&validator_account_id) {
                     Some(staked_balance_) => staked_balance_,
                     None => {
-                        investor_investment_info.distributions_quantity += 1;
+                        investor_investment.distributions_quantity += 1;
 
                         0
                     }
                 };
                 staked_balance += near_amount;
-                investor_investment_info.distribution_registry.insert(&validator_account_id, &staked_balance);
-                investor_investment_info.staked_balance += near_amount;
-                self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment_info);
+                investor_investment.distribution_registry.insert(&validator_account_id, &staked_balance);
+                investor_investment.staked_balance += near_amount;
+                self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment);
 
                 let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
                     Some(token_balance_) => token_balance_,

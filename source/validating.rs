@@ -1,7 +1,7 @@
 use near_sdk::{env, StorageUsage, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap, LookupMap};
-use super::investor_investment_info::InvestorInvestmentInfo;
+use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::storage_key::StorageKey;
 use super::validator::Validator;
@@ -11,7 +11,7 @@ use super::validator_staking_contract_version::ValidatorStakingContractVersion;
 pub struct Validating {
     pub validator_registry: UnorderedMap<AccountId, Validator>,
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
-    pub investor_investment_registry: LookupMap<AccountId, InvestorInvestmentInfo>,
+    pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,
     pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
     pub validators_maximum_quantity: Option<u64>,
     pub preffered_validtor: Option<AccountId>,
@@ -60,7 +60,7 @@ impl Validating {
 
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));           // TODO эту строку через функцию
 
-        investor_registry.insert(&account_id, &InvestorInvestmentInfo::new(account_id.clone()));
+        investor_registry.insert(&account_id, &InvestorInvestment::new(account_id.clone()));
 
         env::storage_usage() - initial_storage_usage
     }
@@ -68,7 +68,7 @@ impl Validating {
     fn calculate_storage_usage_per_additional_distribution() -> StorageUsage {
         let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
-        let mut distribution_registry = InvestorInvestmentInfo::initialize_distribution_registry(account_id.clone());
+        let mut distribution_registry = InvestorInvestment::initialize_distribution_registry(account_id.clone());
 
         let initial_storage_usage = env::storage_usage();
 
@@ -81,7 +81,7 @@ impl Validating {
         UnorderedMap::new(StorageKey::ValidatorRegistry)
     }
 
-    fn initialize_investor_investment_registry() -> LookupMap<AccountId, InvestorInvestmentInfo> {
+    fn initialize_investor_investment_registry() -> LookupMap<AccountId, InvestorInvestment> {
         LookupMap::new(StorageKey::InvestorRegistry)
     }
 }

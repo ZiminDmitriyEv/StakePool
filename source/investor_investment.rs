@@ -4,13 +4,13 @@ use near_sdk::collections::LookupMap;
 use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
-pub struct InvestorInvestmentInfo {
+pub struct InvestorInvestment {
     pub distribution_registry: LookupMap<AccountId, Balance>,
     pub distributions_quantity: u64,      // TODO Нужно ли.
     pub staked_balance: Balance
 }
 
-impl InvestorInvestmentInfo {
+impl InvestorInvestment {
     pub fn new(investor_account_id: AccountId) -> Self {
         Self {
             distribution_registry: Self::initialize_distribution_registry(investor_account_id),
