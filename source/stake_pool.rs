@@ -189,7 +189,7 @@ impl StakePool {
         self.internal_is_account_registered(account_id)
     }
 
-    pub fn get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128) {
+    pub fn get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128, U128) {
         self.internal_get_account_balance(account_id)
     }
 
@@ -1315,7 +1315,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128) {
+    fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128, U128) {
         let token_balance = match self.fungible_token.account_registry.get(&account_id) {
             Some(token_balance_) => token_balance_,
             None => {
@@ -1334,7 +1334,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
         }
 
-        (token_balance.into(), (common_near_balance - investment_near_balance).into(), investment_near_balance.into())
+        (token_balance.into(), common_near_balance.into(), (common_near_balance - investment_near_balance).into(), investment_near_balance.into())
     }
 
     fn internal_get_management_fund(&self) -> (U128, U128, U128) {
