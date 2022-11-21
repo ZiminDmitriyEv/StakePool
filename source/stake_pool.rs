@@ -97,6 +97,7 @@ impl StakePool {
         self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id)
     }
 
+    #[payable]
     pub fn take_delayed_withdrawal(&mut self) -> Promise {
         self.internal_take_delayed_withdrawal()
     }
@@ -746,6 +747,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
+        let attached_deposit = env::attached_deposit();
+        if attached_deposit != MINIMUM_ATTACHED_DEPOSIT {
+            env::panic_str("Wrong attached deposit.");
+        }
+
         let predecessor_account_id = env::predecessor_account_id();
 
         match self.management_fund.delayed_withdrawn_fund.account_registry.remove(&predecessor_account_id) {
@@ -756,8 +762,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
                 self.management_fund.delayed_withdrawn_fund.balance -= delayed_withdrawal_info.near_amount;
 
-                let near_amount = delayed_withdrawal_info.near_amount +
-                    Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account);
+                let near_amount = delayed_withdrawal_info.near_amount
+                    + Self::calculate_storage_staking_price(self.management_fund.delayed_withdrawn_fund.storage_usage_per_account)
+                    + attached_deposit;
 
                 Promise::new(predecessor_account_id)
                     .transfer(near_amount)
