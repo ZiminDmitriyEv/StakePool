@@ -181,8 +181,8 @@ impl StakePool {
         self.internal_has_delayed_withdrawal(account_id)
     }
 
-    pub fn get_epoch_quantity_to_take_delayed_withdrawal(&self, account_id: AccountId) -> u64 {
-        self.internal_get_epoch_quantity_to_take_delayed_withdrawal(account_id)
+    pub fn get_delayed_withdrawal_details(&self, account_id: AccountId) -> (u64, U128) {
+        self.internal_get_delayed_withdrawal_details(account_id)
     }
 
     pub fn is_account_registered(&self, account_id: AccountId) -> bool {
@@ -1278,11 +1278,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.delayed_withdrawn_fund.account_registry.contains_key(&account_id)
     }
 
-    pub fn internal_get_epoch_quantity_to_take_delayed_withdrawal(&self, account_id: AccountId) -> u64 {
+    pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> (u64, U128) {
         self.assert_epoch_is_synchronized();
 
         match self.management_fund.delayed_withdrawn_fund.account_registry.get(&account_id) {
-            Some(delayed_withdrawal_info) => delayed_withdrawal_info.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+            Some(delayed_withdrawal_info) =>
+                (delayed_withdrawal_info.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height), delayed_withdrawal_info.near_amount.into()),
             None => {
                 env::panic_str("Delayed withdrawal account is not registered yet.");
             }
