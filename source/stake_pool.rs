@@ -3,6 +3,7 @@ use near_contract_standards::fungible_token::core::FungibleTokenCore;
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
+use super::account_registry::AccountRegistry;
 use super::cross_contract_call::validator::validator;
 use super::data_transfer_object::aggregated_info::AggregatedInfo;
 use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfo;
@@ -19,8 +20,8 @@ use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::MINIMUM_ATTACHED_DEPOSIT;
 use super::stake_decreasing_kind::StakeDecreasingType;
-use super::validating::Validating;
 use super::staking_contract_version::StakingContractVersion;
+use super::validating::Validating;
 use super::validator::Validator;
 use uint::construct_uint;
 
@@ -30,11 +31,8 @@ construct_uint! {
 
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить там, где Мэпы и сеты, посмотреть, где нужно !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
-pub struct StakePool {      // TODO Можно перенести Структуру в место, где будут все структуры. А Функциональность оставить. Раз я решил делать Публичные поля
-    owner_id: AccountId,
-    manager_id: AccountId,
-    rewards_receiver_account_id: AccountId,
-    everstake_rewards_receiver_account_id: AccountId,           // TOOD 4 аккаунта выше вынести в отдельную структуру
+pub struct StakePool {
+    account_registry: AccountRegistry,
     fungible_token: FungibleToken,
     fund: Fund,
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
@@ -80,7 +78,7 @@ impl StakePool {
     }
 
     /// Instant unstake process.
-    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
+    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {     // TODO добавиьь 1 ектонеар аттачед депозит?
         self.internal_instant_withdraw(token_amount.into())
     }
 
@@ -294,30 +292,32 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             everstake_rewards_fee_.assert_valid();
         }
 
+        let predecessor_account_id = env::predecessor_account_id();
+
         let manager_id_ = match manager_id {
-            Some(manager_id__) => {
-                manager_id__
-            }
-            None => {
-                env::predecessor_account_id()
-            }
+            Some(manager_id__) => manager_id__,
+            None => predecessor_account_id.clone()
+        };
+
+        let account_registry = AccountRegistry {
+            owner_id: predecessor_account_id.clone(),
+            manager_id: manager_id_,
+            rewards_receiver_account_id,
+            everstake_rewards_receiver_account_id
         };
 
         let mut stake_pool = Self {
-            owner_id: env::predecessor_account_id(),
-            manager_id: manager_id_,
-            rewards_receiver_account_id: rewards_receiver_account_id.clone(),
-            everstake_rewards_receiver_account_id: everstake_rewards_receiver_account_id.clone(),
+            account_registry,
             fee_registry: FeeRegistry { rewards_fee, everstake_rewards_fee },
-            fungible_token: FungibleToken::new(env::predecessor_account_id()),
+            fungible_token: FungibleToken::new(predecessor_account_id),
             fund: Fund::new(),
             validating: Validating::new(validators_maximum_quantity),
             current_epoch_height: env::epoch_height(),
             previous_epoch_rewards_from_validators_near_amount: 0,
             total_rewards_from_validators_near_amount: 0
         };
-        stake_pool.fungible_token.account_registry.insert(&rewards_receiver_account_id, &0);
-        stake_pool.fungible_token.account_registry.insert(&everstake_rewards_receiver_account_id, &0);
+        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.rewards_receiver_account_id, &0);
+        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.everstake_rewards_receiver_account_id, &0);
         stake_pool.fungible_token.accounts_quantity = 2;
 
         stake_pool
@@ -505,8 +505,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
         if token_balance > 0
-            || predecessor_account_id == self.rewards_receiver_account_id
-            || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
+            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -582,8 +582,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
         if token_balance > 0
-            || predecessor_account_id == self.rewards_receiver_account_id
-            || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
+            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
            self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -721,8 +721,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         token_balance -= token_amount;
         if token_balance > 0
-            || predecessor_account_id == self.rewards_receiver_account_id
-            || predecessor_account_id == self.everstake_rewards_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
+            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -984,12 +984,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
             let rewards_fee_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
             if rewards_fee_token_amount != 0 {
-                match self.fungible_token.account_registry.get(&self.rewards_receiver_account_id) {
+                match self.fungible_token.account_registry.get(&self.account_registry.rewards_receiver_account_id) {
                     Some(mut token_balance) => {
                         token_balance += rewards_fee_token_amount;
 
                         self.fungible_token.total_supply += rewards_fee_token_amount;
-                        self.fungible_token.account_registry.insert(&self.rewards_receiver_account_id, &token_balance);
+                        self.fungible_token.account_registry.insert(&self.account_registry.rewards_receiver_account_id, &token_balance);
                     }
                     None => {
                         env::panic_str("Object should exist.");
@@ -1000,12 +1000,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             if let Some(ref everstake_rewards_fee) = self.fee_registry.everstake_rewards_fee {
                 let everstake_rewards_fee_token_amount = everstake_rewards_fee.multiply(rewards_fee_token_amount);
                 if everstake_rewards_fee_token_amount != 0 {
-                    match self.fungible_token.account_registry.get(&self.everstake_rewards_receiver_account_id) {
+                    match self.fungible_token.account_registry.get(&self.account_registry.everstake_rewards_receiver_account_id) {
                         Some(mut token_balance) => {
                             token_balance += everstake_rewards_fee_token_amount;
 
                             self.fungible_token.total_supply += everstake_rewards_fee_token_amount;
-                            self.fungible_token.account_registry.insert(&self.everstake_rewards_receiver_account_id, &token_balance);
+                            self.fungible_token.account_registry.insert(&self.account_registry.everstake_rewards_receiver_account_id, &token_balance);
                         }
                         None => {
                             env::panic_str("Object should exist.");
@@ -1187,7 +1187,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management();
 
-        self.manager_id = manager_id;
+        self.account_registry.manager_id = manager_id;
     }
 
     fn internal_change_rewards_fee(&mut self, rewards_fee: Option<Fee>) {
@@ -1264,8 +1264,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         receiver_account_token_balance += token_amount;
 
         if predecessor_account_token_balance > 0
-            || predecessor_account_id == self.rewards_receiver_account_id
-            || predecessor_account_id == self.everstake_rewards_receiver_account_id {                                           // TODO стоит ли записать здесь и везде два последних условия через метод
+            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
+            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id {                                           // TODO стоит ли записать здесь и везде два последних условия через метод
             self.fungible_token.account_registry.insert(&predecessor_account_id, &predecessor_account_token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -1493,7 +1493,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn assert_authorized_management_only_by_manager(&self) {
-        if self.manager_id != env::predecessor_account_id() {
+        if env::predecessor_account_id() != self.account_registry.manager_id {
             env::panic_str("Unauthorized management. Management must be carried out either by the manager of the pool.");
         }
     }
@@ -1501,7 +1501,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn assert_authorized_management(&self) {
         let predecessor_account_id = env::predecessor_account_id();
 
-        if self.owner_id != predecessor_account_id && self.manager_id != predecessor_account_id {
+        if predecessor_account_id != self.account_registry.owner_id
+            && predecessor_account_id != self.account_registry.manager_id {
             env::panic_str("Unauthorized management. Management must be carried out either by the owner or manager of the pool.");
         }
     }

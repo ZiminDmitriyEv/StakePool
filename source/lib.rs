@@ -1,5 +1,7 @@
 use near_sdk::Balance;
 
+pub mod stake_pool;
+pub(crate) mod account_registry;
 pub(crate) mod cross_contract_call;
 pub(crate) mod data_transfer_object;
 pub(crate) mod delayed_withdrawal;
@@ -11,7 +13,6 @@ pub(crate) mod fungible_token_metadata;
 pub(crate) mod fungible_token;
 pub(crate) mod investment_withdrawal;
 pub(crate) mod investor_investment;
-pub mod stake_pool;
 pub(crate) mod stake_decreasing_kind;
 pub(crate) mod staking_contract_version;
 pub(crate) mod storage_key;

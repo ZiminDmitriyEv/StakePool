@@ -7,7 +7,7 @@ use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct FungibleToken {
-    pub owner_id: AccountId,
+    pub owner_id: AccountId,        // TODO Нужен ли?
     pub total_supply: Balance,
     pub account_registry: LookupMap<AccountId, Balance>,
     pub accounts_quantity: u64,
