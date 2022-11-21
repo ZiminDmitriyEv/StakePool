@@ -816,7 +816,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_gas_is_enough();
         self.assert_epoch_is_desynchronized();
         self.assert_authorized_management_only_by_manager();
-        Self::assert_epoch_is_right(env::epoch_height());
+        if !Self::epoch_is_right(env::epoch_height()) {
+            env::panic_str("Epoch is not intended for a requested decrease validator stake request.");
+        }
 
         if near_amount == 0 {
             env::panic_str("Insufficient near amount.");
@@ -882,14 +884,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let current_epoch_height = env::epoch_height();
 
-        Self::assert_epoch_is_right(current_epoch_height);
+        if !Self::epoch_is_right(current_epoch_height) {
+            env::panic_str("Epoch is not intended for a take unstaked balance.");
+        }
 
         match self.validating_node.validator_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
             Some(validator_info) => {
                 if validator_info.unstaked_balance == 0 {
                     env::panic_str("Insufficient unstaked balance on validator.");
                 }
-                if validator_info.last_update_info_epoch_height >= current_epoch_height {
+                if validator_info.last_update_info_epoch_height >= current_epoch_height {       // TODO нужно ли это услвоие
                     env::panic_str("Validator is already updated.");
                 }
 
@@ -950,8 +954,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if self.validating_node.quantity_of_validators_updated_in_current_epoch != self.validating_node.validators_quantity {
             env::panic_str("Some validators are not updated.");
         }
-        if self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount > 0
-            || self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount > 0 {
+
+        let current_epoch_height = env::epoch_height();
+
+        if Self::epoch_is_right(current_epoch_height)
+            && (self.management_fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount > 0
+                || self.management_fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount > 0) {
                 env::panic_str("Some funds are not unstaked from validators.");
         }
 
@@ -962,7 +970,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.management_fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
         self.management_fund.is_distributed_on_validators_in_current_epoch = false;
         self.validating_node.quantity_of_validators_updated_in_current_epoch = 0;
-        self.current_epoch_height = env::epoch_height();
+        self.current_epoch_height = current_epoch_height;
         self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;
         self.previous_epoch_rewards_from_validators_near_amount = 0;                               // TODO переназвать, Убрать в впомагательные параметры.
 
@@ -1495,10 +1503,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn assert_epoch_is_right(epoch_height: EpochHeight) {
-        if epoch_height % 4 != 0  {
-            env::panic_str("Epoch is not right.");
-        }
+    fn epoch_is_right(epoch_height: EpochHeight) -> bool {
+        (epoch_height % 4) == 0                                                      // TODO  цифру 4 - в константу положить.
     }
 
     fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Balance {
@@ -1669,7 +1675,7 @@ impl StakePool {
         near_amount: Balance,
         stake_decreasing_type: StakeDecreasingType,
         refundable_near_amount: Balance
-    ) -> bool {
+    ) -> (bool, EpochHeight) {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -1714,16 +1720,16 @@ impl StakePool {
                 validator_info.unstaked_balance += near_amount;
                 self.validating_node.validator_registry.insert(&validator_account_id, &validator_info);
 
-                true
+                (true, env::epoch_height())
             }
             _ => {
-                false
+                (false, env::epoch_height())
             }
         }
     }
 
     #[private]
-    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> bool {  // TODO Может быть, ставить счетчик на количество валиаторов, с которыз нужно снимать стейк, чтобы проверять.
+    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> (bool, EpochHeight) {  // TODO Может быть, ставить счетчик на количество валиаторов, с которыз нужно снимать стейк, чтобы проверять.
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -1742,10 +1748,10 @@ impl StakePool {
                 validator_info.unstaked_balance = 0;
                 self.validating_node.validator_registry.insert(&validator_account_id, &validator_info);
 
-                true
+                (true, env::epoch_height())
             }
             _ => {
-                false
+                (false, env::epoch_height())
             }
         }
     }
