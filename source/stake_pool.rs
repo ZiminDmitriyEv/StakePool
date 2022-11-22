@@ -179,19 +179,11 @@ impl StakePool {
 
     /// View-methods:
 
-    pub fn has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
-        self.internal_has_delayed_withdrawal(account_id)
-    }
-
-    pub fn get_delayed_withdrawal_details(&self, account_id: AccountId) -> (u64, U128) {
+    pub fn get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<(u64, U128)> {
         self.internal_get_delayed_withdrawal_details(account_id)
     }
 
-    pub fn is_account_registered(&self, account_id: AccountId) -> bool {
-        self.internal_is_account_registered(account_id)
-    }
-
-    pub fn get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128, U128) {
+    pub fn get_account_balance(&self, account_id: AccountId) -> Option<(U128, U128, U128, Option<U128>)> {
         self.internal_get_account_balance(account_id)
     }
 
@@ -223,11 +215,7 @@ impl StakePool {
         self.internal_is_stake_distributed()
     }
 
-    pub fn is_investor(&self, account_id: AccountId) -> bool {
-        self.internal_is_investor(account_id)
-    }
-
-    pub fn get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfo {
+    pub fn get_investor_investment_info(&self, account_id: AccountId) -> Option<InvestorInvestmentInfo> {
         self.internal_get_investor_investment_info(account_id)
     }
 
@@ -241,6 +229,16 @@ impl StakePool {
 
     pub fn get_requested_to_withdrawal_fund(&self) -> RequestedToWithdrawalFund {
         self.internal_get_requested_to_withdrawal_fund()
+    }
+
+    pub fn get_full_info(&self, account_id: AccountId) -> (
+        StorageStakingPrice,
+        (U128, U128, U128),
+        Option<(U128, U128, U128, Option<U128>)>,
+        Option<(u64, U128)>,
+        U128
+    ) {
+        self.internal_get_full_info(account_id)
     }
 }
 
@@ -1353,26 +1351,19 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             .transfer(near_amount)
     }
 
-    pub fn internal_has_delayed_withdrawal(&self, account_id: AccountId) -> bool {
+    pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<(u64, U128)> {
         self.assert_epoch_is_synchronized();
 
-        self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.contains_key(&account_id)
-    }
-
-    pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> (u64, U128) {
-        self.assert_epoch_is_synchronized();
-
-        match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&account_id) {
-            Some(delayed_withdrawal) =>
-                (delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height), delayed_withdrawal.near_amount.into()),
-            None => {
-                env::panic_str("Delayed withdrawal account is not registered yet.");
-            }
+        if let Some(delayed_withdrawal) = self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&account_id) {
+            return Some(
+                (
+                    delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+                    delayed_withdrawal.near_amount.into()
+                )
+            );
         }
-    }
 
-    fn internal_is_account_registered(&self, account_id: AccountId) -> bool {
-        self.fungible_token.account_registry.contains_key(&account_id)
+        None
     }
 
     fn internal_get_total_token_supply(&self) -> Balance {
@@ -1396,26 +1387,42 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_account_balance(&self, account_id: AccountId) -> (U128, U128, U128, U128) {
+    fn internal_get_account_balance(&self, account_id: AccountId) -> Option<(U128, U128, U128, Option<U128>)> {
         let token_balance = match self.fungible_token.account_registry.get(&account_id) {
             Some(token_balance_) => token_balance_,
             None => {
-                env::panic_str("Token account is not registered yet.");
+                return None;
             }
         };
 
         let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
 
-        let investment_near_balance = match self.validating.investor_investment_registry.get(&account_id) {
-            Some(investor_investment) => investor_investment.staked_balance,
-            None => 0
-        };
+        match self.validating.investor_investment_registry.get(&account_id) {
+            Some(investor_investment) => {
+                if common_near_balance < investor_investment.staked_balance {
+                    env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
+                }
 
-        if common_near_balance < investment_near_balance {
-            env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
+                Some(
+                    (
+                        token_balance.into(),
+                        common_near_balance.into(),
+                        (common_near_balance - investor_investment.staked_balance).into(),
+                        Some(investor_investment.staked_balance.into())
+                    )
+                )
+            }
+            None => {
+                Some(
+                    (
+                        token_balance.into(),
+                        common_near_balance.into(),
+                        common_near_balance.into(),
+                        None
+                    )
+                )
+            }
         }
-
-        (token_balance.into(), common_near_balance.into(), (common_near_balance - investment_near_balance).into(), investment_near_balance.into())
     }
 
     fn internal_get_fund(&self) -> (U128, U128, U128) {
@@ -1442,13 +1449,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fund.is_distributed_on_validators_in_current_epoch
     }
 
-    pub fn internal_is_investor(&self, account_id: AccountId) -> bool {
-        self.assert_epoch_is_synchronized();
-
-        self.validating.investor_investment_registry.contains_key(&account_id)
-    }
-
-    pub fn internal_get_investor_investment_info(&self, account_id: AccountId) -> InvestorInvestmentInfo {
+    pub fn internal_get_investor_investment_info(&self, account_id: AccountId) -> Option<InvestorInvestmentInfo> {
         self.assert_epoch_is_synchronized();
 
         let mut distribution_registry: Vec<(AccountId, U128)> = vec![];
@@ -1456,7 +1457,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let investor_investment = match self.validating.investor_investment_registry.get(&account_id) {
             Some(investor_investment_) => investor_investment_,
             None => {
-                env::panic_str("Investor account is not registered yet.");
+                return None;
             }
         };
 
@@ -1466,10 +1467,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
-        InvestorInvestmentInfo {
-            distribution_registry,
-            staked_balance: investor_investment.staked_balance.into()
-        }
+        Some(
+            InvestorInvestmentInfo {
+                distribution_registry,
+                staked_balance: investor_investment.staked_balance.into()
+            }
+        )
     }
 
     fn internal_get_validator_info_registry(&self) -> Vec<ValidatorInfo> {
@@ -1535,6 +1538,24 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             investment_near_amount: self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount.into(),
             investment_withdrawal_registry
         }
+    }
+
+    pub fn internal_get_full_info(&self, account_id: AccountId) -> (
+        StorageStakingPrice,
+        (U128, U128, U128),
+        Option<(U128, U128, U128, Option<U128>)>,
+        Option<(u64, U128)>,
+        U128
+    ) {
+        self.assert_epoch_is_synchronized();
+
+        (
+            self.internal_get_storage_staking_price(),
+            self.internal_get_fund(),
+            self.internal_get_account_balance(account_id.clone()),
+            self.internal_get_delayed_withdrawal_details(account_id),
+            self.internal_get_total_token_supply().into()
+        )
     }
 
     fn internal_ft_total_supply(&self) -> Balance {
