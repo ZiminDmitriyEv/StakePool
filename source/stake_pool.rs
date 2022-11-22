@@ -19,6 +19,7 @@ use super::investment_withdrawal::InvestmentWithdrawal;
 use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::MINIMUM_ATTACHED_DEPOSIT;
+use super::shared_fee::SharedFee;
 use super::stake_decreasing_kind::StakeDecreasingType;
 use super::staking_contract_version::StakingContractVersion;
 use super::validating::Validating;
@@ -48,19 +49,21 @@ impl StakePool {
     #[init]
     pub fn new(
         manager_id: Option<AccountId>,
-        rewards_receiver_account_id: AccountId,
-        everstake_rewards_receiver_account_id: AccountId,
-        rewards_fee: Option<Fee>,
-        everstake_rewards_fee: Option<Fee>,
-        validators_maximum_quantity: Option<u64>
+        self_fee_receiver_account_id: AccountId,
+        partner_fee_receiver_account_id: AccountId,
+        reward_fee_self: Option<Fee>,
+        reward_fee_partner: Option<Fee>,
+        instant_withdraw_fee_self: Option<Fee>,
+        instant_withdraw_fee_partner: Option<Fee>
     ) -> Self {      // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
         Self::internal_new(
             manager_id,
-            rewards_receiver_account_id,
-            everstake_rewards_receiver_account_id,
-            rewards_fee,
-            everstake_rewards_fee,
-            validators_maximum_quantity
+            self_fee_receiver_account_id,
+            partner_fee_receiver_account_id,
+            reward_fee_self,
+            reward_fee_partner,
+            instant_withdraw_fee_self,
+            instant_withdraw_fee_partner
         )
     }
 
@@ -162,12 +165,12 @@ impl StakePool {
         self.internal_change_manager(manager_id);
     }
 
-    pub fn change_rewards_fee(&mut self, rewards_fee: Option<Fee>) {
-        self.internal_change_rewards_fee(rewards_fee);
+    pub fn change_reward_fee(&mut self, reward_fee_self: Option<Fee>, reward_fee_partner: Option<Fee>) {
+        self.internal_change_reward_fee(reward_fee_self, reward_fee_partner);
     }
 
-    pub fn change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
-        self.internal_change_everstake_rewards_fee(everstake_rewards_fee);
+    pub fn change_instant_withdraw_fee(&mut self, instant_withdraw_fee_self: Option<Fee>, instant_withdraw_fee_partner: Option<Fee>) {
+        self.internal_change_instant_withdraw_fee(instant_withdraw_fee_self, instant_withdraw_fee_partner);
     }
 
     pub fn confirm_stake_distribution(&mut self) {
@@ -271,26 +274,60 @@ impl FungibleTokenCore for StakePool {
 impl StakePool {        // TODO TODO TODO добавить логи к каждой манипуляции с деньгами или event. Интерфейсы
     fn internal_new(
         manager_id: Option<AccountId>,
-        rewards_receiver_account_id: AccountId,
-        everstake_rewards_receiver_account_id: AccountId,
-        rewards_fee: Option<Fee>,
-        everstake_rewards_fee: Option<Fee>,
-        validators_maximum_quantity: Option<u64>
+        self_fee_receiver_account_id: AccountId,
+        partner_fee_receiver_account_id: AccountId,
+        reward_fee_self: Option<Fee>,
+        reward_fee_partner: Option<Fee>,
+        instant_withdraw_fee_self: Option<Fee>,
+        instant_withdraw_fee_partner: Option<Fee>
     ) -> Self {                                     // TODO Посмотреть, сколько нужно для хранения всего стейта ниже. Остальной депозит пололожить в качестве стейка.
         if env::state_exists() {
             env::panic_str("Contract state is already initialize.");
         }
 
-        if rewards_receiver_account_id == everstake_rewards_receiver_account_id {
-            env::panic_str("The rewards receiver account and everstake rewards receiver account can not be the same.");
+        if self_fee_receiver_account_id == partner_fee_receiver_account_id {
+            env::panic_str("The self fee receiver account and partner fee receiver account can not be the same.");
         }
 
-        if let Some(ref rewards_fee_) = rewards_fee {
-            rewards_fee_.assert_valid();
+        if reward_fee_self.is_none() && reward_fee_partner.is_some() {
+            env::panic_str("Reward fees are not valid.");
         }
-        if let Some(ref everstake_rewards_fee_) = everstake_rewards_fee {
-            everstake_rewards_fee_.assert_valid();
+        let reward_fee = if let Some(reward_fee_self_) = reward_fee_self {
+            reward_fee_self_.assert_valid();
+
+            if let Some(ref reward_fee_partner_) = reward_fee_partner {
+                reward_fee_partner_.assert_valid();
+            }
+
+            Some (
+                SharedFee {
+                    self_fee: reward_fee_self_,
+                    partner_fee: reward_fee_partner
+                }
+            )
+        } else {
+            None
+        };
+
+        if instant_withdraw_fee_self.is_none() && instant_withdraw_fee_partner.is_some() {
+            env::panic_str("Instant withdraw fees are not valid.");
         }
+        let instant_withdraw_fee = if let Some(instant_withdraw_fee_self_) = instant_withdraw_fee_self {
+            instant_withdraw_fee_self_.assert_valid();
+
+            if let Some(ref instant_withdraw_fee_partner_) = instant_withdraw_fee_partner {
+                instant_withdraw_fee_partner_.assert_valid();
+            }
+
+            Some (
+                SharedFee {
+                    self_fee: instant_withdraw_fee_self_,
+                    partner_fee: instant_withdraw_fee_partner
+                }
+            )
+        } else {
+            None
+        };
 
         let predecessor_account_id = env::predecessor_account_id();
 
@@ -299,25 +336,26 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             None => predecessor_account_id.clone()
         };
 
-        let account_registry = AccountRegistry {
-            owner_id: predecessor_account_id.clone(),
-            manager_id: manager_id_,
-            rewards_receiver_account_id,
-            everstake_rewards_receiver_account_id
-        };
-
         let mut stake_pool = Self {
-            account_registry,
-            fee_registry: FeeRegistry { rewards_fee, everstake_rewards_fee },
+            account_registry: AccountRegistry {
+                owner_id: predecessor_account_id.clone(),
+                manager_id: manager_id_,
+                self_fee_receiver_account_id,
+                partner_fee_receiver_account_id
+            },
+            fee_registry: FeeRegistry {
+                reward_fee,
+                instant_withdraw_fee
+            },
             fungible_token: FungibleToken::new(predecessor_account_id),
             fund: Fund::new(),
-            validating: Validating::new(validators_maximum_quantity),
+            validating: Validating::new(),
             current_epoch_height: env::epoch_height(),
             previous_epoch_rewards_from_validators_near_amount: 0,
             total_rewards_from_validators_near_amount: 0
         };
-        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.rewards_receiver_account_id, &0);
-        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.everstake_rewards_receiver_account_id, &0);
+        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.self_fee_receiver_account_id, &0);
+        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.partner_fee_receiver_account_id, &0);
         stake_pool.fungible_token.accounts_quantity = 2;
 
         stake_pool
@@ -469,7 +507,21 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_instant_withdraw(&mut self, token_amount: Balance) -> Promise {   // TODO проставить процент на снятие!!
+    fn internal_instant_withdraw(&mut self, token_amount: Balance) -> Promise {
+
+
+        // ФИИ проставить на снятие.
+
+
+
+
+
+
+
+
+
+
+
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -505,8 +557,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
         if token_balance > 0
-            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
-            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
+            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -582,8 +634,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
         if token_balance > 0
-            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
-            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
+            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
            self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -721,8 +773,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         token_balance -= token_amount;
         if token_balance > 0
-            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
-            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
+            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -981,34 +1033,34 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;
         self.previous_epoch_rewards_from_validators_near_amount = 0;                               // TODO переназвать, Убрать в впомагательные параметры.
 
-        if let Some(ref rewards_fee) = self.fee_registry.rewards_fee {
-            let rewards_fee_token_amount = rewards_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
-            if rewards_fee_token_amount != 0 {
-                match self.fungible_token.account_registry.get(&self.account_registry.rewards_receiver_account_id) {
+        if let Some(ref reward_fee) = self.fee_registry.reward_fee {
+            let reward_fee_self_token_amount = reward_fee.self_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
+            if reward_fee_self_token_amount != 0 {
+                match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
                     Some(mut token_balance) => {
-                        token_balance += rewards_fee_token_amount;
+                        token_balance += reward_fee_self_token_amount;
 
-                        self.fungible_token.total_supply += rewards_fee_token_amount;
-                        self.fungible_token.account_registry.insert(&self.account_registry.rewards_receiver_account_id, &token_balance);
+                        self.fungible_token.total_supply += reward_fee_self_token_amount;
+                        self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
                     }
                     None => {
                         env::panic_str("Object should exist.");
                     }
                 }
-            }
 
-            if let Some(ref everstake_rewards_fee) = self.fee_registry.everstake_rewards_fee {
-                let everstake_rewards_fee_token_amount = everstake_rewards_fee.multiply(rewards_fee_token_amount);
-                if everstake_rewards_fee_token_amount != 0 {
-                    match self.fungible_token.account_registry.get(&self.account_registry.everstake_rewards_receiver_account_id) {
-                        Some(mut token_balance) => {
-                            token_balance += everstake_rewards_fee_token_amount;
+                if let Some(ref reward_fee_partner) = reward_fee.partner_fee {
+                    let reward_fee_partner_token_amount = reward_fee_partner.multiply(reward_fee_self_token_amount);
+                    if reward_fee_partner_token_amount != 0 {
+                        match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
+                            Some(mut token_balance) => {
+                                token_balance += reward_fee_partner_token_amount;
 
-                            self.fungible_token.total_supply += everstake_rewards_fee_token_amount;
-                            self.fungible_token.account_registry.insert(&self.account_registry.everstake_rewards_receiver_account_id, &token_balance);
-                        }
-                        None => {
-                            env::panic_str("Object should exist.");
+                                self.fungible_token.total_supply += reward_fee_partner_token_amount;
+                                self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance);
+                            }
+                            None => {
+                                env::panic_str("Object should exist.");
+                            }
                         }
                     }
                 }
@@ -1030,12 +1082,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         let storage_staking_price_per_additional_validator_account = Self::calculate_storage_staking_price(self.validating.storage_usage_per_validator);
         if env::attached_deposit() < storage_staking_price_per_additional_validator_account {
             env::panic_str("Insufficient near deposit.");
-        }
-
-        if let Some(maximium_quantity) = self.validating.validators_maximum_quantity {
-            if self.validating.validators_quantity == maximium_quantity {
-                env::panic_str("Validator maximum quantity is exceeded.");
-            }
         }
 
         if let Some(_) = self.validating.validator_registry.insert(
@@ -1190,28 +1236,56 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.account_registry.manager_id = manager_id;
     }
 
-    fn internal_change_rewards_fee(&mut self, rewards_fee: Option<Fee>) {
+    fn internal_change_reward_fee(&mut self, reward_fee_self: Option<Fee>, reward_fee_partner: Option<Fee>) {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
-        if let Some(ref rewards_fee_) = rewards_fee {
-            rewards_fee_.assert_valid();
+        if reward_fee_self.is_none() && reward_fee_partner.is_some() {
+            env::panic_str("Reward fees are not valid.");
         }
+        self.fee_registry.reward_fee = if let Some(reward_fee_self_) = reward_fee_self {
+            reward_fee_self_.assert_valid();
 
-        self.fee_registry.rewards_fee = rewards_fee;
+            if let Some(ref reward_fee_partner) = reward_fee_partner {
+                reward_fee_partner.assert_valid();
+            }
+
+            Some (
+                SharedFee {
+                    self_fee: reward_fee_self_,
+                    partner_fee: reward_fee_partner
+                }
+            )
+        } else {
+            None
+        };
     }
 
-    fn internal_change_everstake_rewards_fee(&mut self, everstake_rewards_fee: Option<Fee>) {
+    fn internal_change_instant_withdraw_fee(&mut self, instant_withdraw_fee_self: Option<Fee>, instant_withdraw_fee_partner: Option<Fee>) {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
-        if let Some(ref everstake_rewards_fee_) = everstake_rewards_fee {
-            everstake_rewards_fee_.assert_valid();
+        if instant_withdraw_fee_self.is_none() && instant_withdraw_fee_partner.is_some() {
+            env::panic_str("Instant withdraw fees are not valid.");
         }
+        self.fee_registry.instant_withdraw_fee = if let Some(instant_withdraw_fee_self_) = instant_withdraw_fee_self {
+            instant_withdraw_fee_self_.assert_valid();
 
-        self.fee_registry.everstake_rewards_fee = everstake_rewards_fee;
+            if let Some(ref instant_withdraw_fee_partner) = instant_withdraw_fee_partner {
+                instant_withdraw_fee_partner.assert_valid();
+            }
+
+            Some (
+                SharedFee {
+                    self_fee: instant_withdraw_fee_self_,
+                    partner_fee: instant_withdraw_fee_partner
+                }
+            )
+        } else {
+            None
+        };
     }
 
     fn internal_confirm_stake_distribution(&mut self) {
@@ -1264,8 +1338,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         receiver_account_token_balance += token_amount;
 
         if predecessor_account_token_balance > 0
-            || predecessor_account_id == self.account_registry.rewards_receiver_account_id
-            || predecessor_account_id == self.account_registry.everstake_rewards_receiver_account_id {                                           // TODO стоит ли записать здесь и везде два последних условия через метод
+            || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
+            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {                                           // TODO стоит ли записать здесь и везде два последних условия через метод
             self.fungible_token.account_registry.insert(&predecessor_account_id, &predecessor_account_token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -1431,13 +1505,19 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_aggregated_info(&self) -> AggregatedInfo {
         self.assert_epoch_is_synchronized();
 
+        let reward_fee_self = if let Some(ref reward_fee) = self.fee_registry.reward_fee {
+            Some(reward_fee.self_fee.clone())
+        } else {
+            None
+        };
+
         AggregatedInfo {
             unstaked_balance: self.fund.unstaked_balance.into(),
             staked_balance: self.fund.staked_balance.into(),
             token_total_supply: self.fungible_token.total_supply.into(),
             token_accounts_quantity: self.fungible_token.accounts_quantity,
             total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
-            rewards_fee: self.fee_registry.rewards_fee.clone()
+            rewards_fee: reward_fee_self
         }
     }
 

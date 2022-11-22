@@ -13,7 +13,6 @@ pub struct Validating {
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
     pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,
     pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
-    pub validators_maximum_quantity: Option<u64>,
     pub preffered_validtor: Option<AccountId>,
     pub quantity_of_validators_updated_in_current_epoch: u64,
     /// In bytes.
@@ -25,12 +24,11 @@ pub struct Validating {
 }
 
 impl Validating {
-    pub fn new(validators_maximum_quantity: Option<u64>) -> Self {
+    pub fn new() -> Self {
         Self {
             validator_registry: Self::initialize_validator_registry(),
             investor_investment_registry: Self::initialize_investor_investment_registry(),
             validators_quantity: 0,
-            validators_maximum_quantity,
             preffered_validtor: None,
             quantity_of_validators_updated_in_current_epoch: 0,
             storage_usage_per_validator: Self::calculate_storage_usage_per_additional_validator(),
