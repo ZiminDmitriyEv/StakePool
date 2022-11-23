@@ -183,7 +183,7 @@ impl StakePool {
         self.internal_get_delayed_withdrawal_details(account_id)
     }
 
-    pub fn get_account_balance(&self, account_id: AccountId) -> Option<(U128, U128, U128, Option<U128>)> {
+    pub fn get_account_balance(&self, account_id: AccountId) -> (Option<(U128, U128, U128)>, Option<U128>) {
         self.internal_get_account_balance(account_id)
     }
 
@@ -234,7 +234,7 @@ impl StakePool {
     pub fn get_full_info(&self, account_id: AccountId) -> (
         StorageStakingPrice,
         (U128, U128, U128),
-        Option<(U128, U128, U128, Option<U128>)>,
+        (Option<(U128, U128, U128)>, Option<U128>),
         Option<(u64, U128)>,
         U128
     ) {
@@ -505,21 +505,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_instant_withdraw(&mut self, token_amount: Balance) -> Promise {
-
-
-        // ФИИ проставить на снятие.
-
-
-
-
-
-
-
-
-
-
-
+    fn internal_instant_withdraw(&mut self, mut token_amount: Balance) -> Promise {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -539,21 +525,60 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
-        let mut near_amount = self.convert_token_amount_to_near_amount(token_amount);      // TODO  TODO  TODO  TODO  TODO  Может, конвертацию везде нужно считать на коллбеке в контексте лостАпдейта?
-        if near_amount == 0 {
-            env::panic_str("Insufficient token amount.");
-        }
-        if near_amount > self.fund.unstaked_balance {
-            env::panic_str("Token amount exceeded the available unstaked near balance.");
-        }
-        self.fund.unstaked_balance -= near_amount;
-
         token_balance -= token_amount;
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
             if self.convert_token_amount_to_near_amount(token_balance) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to instant withdraw token amount.");
             }
         }
+
+        if let Some(ref instant_withdraw_fee) = self.fee_registry.instant_withdraw_fee {
+            let mut instant_withdraw_fee_self_token_amount = instant_withdraw_fee.self_fee.multiply(token_amount);
+            if instant_withdraw_fee_self_token_amount != 0 {
+                token_amount -= instant_withdraw_fee_self_token_amount;
+
+                if let Some(ref instant_withdraw_fee_partner) = instant_withdraw_fee.partner_fee {
+                    let instant_withdraw_fee_partner_token_amount = instant_withdraw_fee_partner.multiply(instant_withdraw_fee_self_token_amount);
+                    if instant_withdraw_fee_partner_token_amount != 0 {
+                        instant_withdraw_fee_self_token_amount -= instant_withdraw_fee_partner_token_amount;
+
+                        match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
+                            Some(mut token_balance_) => {
+                                token_balance_ += instant_withdraw_fee_partner_token_amount;
+
+                                self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance_);
+                            }
+                            None => {
+                                env::panic_str("Object should exist.");
+                            }
+                        }
+                    }
+                }
+
+                match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
+                    Some(mut token_balance_) => {
+                        token_balance_ += instant_withdraw_fee_self_token_amount;
+
+                        self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance_);
+                    }
+                    None => {
+                        env::panic_str("Object should exist.");
+                    }
+                }
+            }
+        }
+
+        let mut near_amount = self.convert_token_amount_to_near_amount(token_amount);      // TODO  TODO  TODO  TODO  TODO  Может, конвертацию везде нужно считать на коллбеке в контексте лостАпдейта? братить внимание, что условия на проверку на ноль после конвертации уже ставиь не нужно, если решен вопрос с конвертацией.
+        if near_amount == 0 {
+            env::panic_str("Insufficient token amount.");
+        }
+
+        if near_amount > self.fund.unstaked_balance {
+            env::panic_str("Token amount exceeded the available unstaked near balance.");
+        }
+
+        self.fund.unstaked_balance -= near_amount;
+
         if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
@@ -1020,40 +1045,30 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 env::panic_str("Some funds are not unstaked from validators.");
         }
 
-        let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
-            self.previous_epoch_rewards_from_validators_near_amount
-        );
-
         self.fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
         self.fund.is_distributed_on_validators_in_current_epoch = false;
         self.validating.quantity_of_validators_updated_in_current_epoch = 0;
         self.current_epoch_height = current_epoch_height;
-        self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;
-        self.previous_epoch_rewards_from_validators_near_amount = 0;                               // TODO переназвать, Убрать в впомагательные параметры.
+        self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;                               // TODO переназвать, Убрать в впомагательные параметры.
+
+        let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
+            self.previous_epoch_rewards_from_validators_near_amount
+        );
 
         if let Some(ref reward_fee) = self.fee_registry.reward_fee {
-            let reward_fee_self_token_amount = reward_fee.self_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
+            let mut reward_fee_self_token_amount = reward_fee.self_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
             if reward_fee_self_token_amount != 0 {
-                match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
-                    Some(mut token_balance) => {
-                        token_balance += reward_fee_self_token_amount;
-
-                        self.fungible_token.total_supply += reward_fee_self_token_amount;
-                        self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
-                    }
-                    None => {
-                        env::panic_str("Object should exist.");
-                    }
-                }
+                self.fungible_token.total_supply += reward_fee_self_token_amount;
 
                 if let Some(ref reward_fee_partner) = reward_fee.partner_fee {
                     let reward_fee_partner_token_amount = reward_fee_partner.multiply(reward_fee_self_token_amount);
                     if reward_fee_partner_token_amount != 0 {
+                        reward_fee_self_token_amount -= reward_fee_partner_token_amount;
+
                         match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
                             Some(mut token_balance) => {
                                 token_balance += reward_fee_partner_token_amount;
 
-                                self.fungible_token.total_supply += reward_fee_partner_token_amount;
                                 self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance);
                             }
                             None => {
@@ -1062,8 +1077,21 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                         }
                     }
                 }
+
+                match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
+                    Some(mut token_balance) => {
+                        token_balance += reward_fee_self_token_amount;
+
+                        self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
+                    }
+                    None => {
+                        env::panic_str("Object should exist.");
+                    }
+                }
             }
         }
+
+        self.previous_epoch_rewards_from_validators_near_amount = 0;
     }
 
     fn internal_add_validator(
@@ -1387,40 +1415,54 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_account_balance(&self, account_id: AccountId) -> Option<(U128, U128, U128, Option<U128>)> {
-        let token_balance = match self.fungible_token.account_registry.get(&account_id) {
-            Some(token_balance_) => token_balance_,
-            None => {
-                return None;
-            }
-        };
+    fn internal_get_account_balance(&self, account_id: AccountId) -> (Option<(U128, U128, U128)>, Option<U128>) {
+        match self.fungible_token.account_registry.get(&account_id) {
+            Some(token_balance) => {
+                let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
 
-        let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
+                match self.validating.investor_investment_registry.get(&account_id) {
+                    Some(investor_investment) => {
+                        if common_near_balance < investor_investment.staked_balance {
+                            env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
+                        }
 
-        match self.validating.investor_investment_registry.get(&account_id) {
-            Some(investor_investment) => {
-                if common_near_balance < investor_investment.staked_balance {
-                    env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
+                        (
+                            Some(
+                                (
+                                    token_balance.into(),
+                                    common_near_balance.into(),
+                                    (common_near_balance - investor_investment.staked_balance).into(),
+                                )
+                            ),
+                            Some(investor_investment.staked_balance.into())
+                        )
+                    }
+                    None => {
+                        (
+                            Some(
+                                (
+                                    token_balance.into(),
+                                    common_near_balance.into(),
+                                    common_near_balance.into(),
+                                )
+                            ),
+                            None
+                        )
+                    }
                 }
-
-                Some(
-                    (
-                        token_balance.into(),
-                        common_near_balance.into(),
-                        (common_near_balance - investor_investment.staked_balance).into(),
-                        Some(investor_investment.staked_balance.into())
-                    )
-                )
             }
             None => {
-                Some(
-                    (
-                        token_balance.into(),
-                        common_near_balance.into(),
-                        common_near_balance.into(),
-                        None
-                    )
-                )
+                match self.validating.investor_investment_registry.get(&account_id) {
+                    Some(investor_investment) => {
+                        (
+                            None,
+                            Some(investor_investment.staked_balance.into())
+                        )
+                    }
+                    None => {
+                        (None, None)
+                    }
+                }
             }
         }
     }
@@ -1543,7 +1585,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     pub fn internal_get_full_info(&self, account_id: AccountId) -> (
         StorageStakingPrice,
         (U128, U128, U128),
-        Option<(U128, U128, U128, Option<U128>)>,
+        (Option<(U128, U128, U128)>, Option<U128>),
         Option<(u64, U128)>,
         U128
     ) {
