@@ -16,7 +16,7 @@ pub struct Validator {
     /// investment purposes, this means, that classic staked balance and investment staked balance
     /// can be greater than zero.
     pub is_only_for_investment: bool,
-    pub last_update_info_epoch_height: EpochHeight,     // TODO поменять название
+    pub last_update_epoch_height: EpochHeight,     // TODO поменять название
     pub last_classic_stake_increasing_epoch_height: Option<EpochHeight>
 }
 
@@ -31,7 +31,7 @@ impl Validator {
             unstaked_balance: 0,
             staking_contract_version,
             is_only_for_investment,
-            last_update_info_epoch_height: env::epoch_height(),
+            last_update_epoch_height: env::epoch_height(),
             last_classic_stake_increasing_epoch_height: None
         }
     }

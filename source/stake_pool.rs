@@ -5,7 +5,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::account_registry::AccountRegistry;
 use super::cross_contract_call::validator::validator;
-use super::data_transfer_object::aggregated_info::AggregatedInfo;
+use super::data_transfer_object::aggregated::Aggregated;
 use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfo;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
@@ -223,7 +223,7 @@ impl StakePool {
         self.internal_get_validator_info_registry()
     }
 
-    pub fn get_aggregated_info(&self) -> AggregatedInfo {
+    pub fn get_aggregated_info(&self) -> Aggregated {
         self.internal_get_aggregated_info()
     }
 
@@ -975,7 +975,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 if validator.unstaked_balance == 0 {
                     env::panic_str("Insufficient unstaked balance on validator.");
                 }
-                if validator.last_update_info_epoch_height >= current_epoch_height {       // TODO нужно ли это услвоие
+                if validator.last_update_epoch_height >= current_epoch_height {       // TODO нужно ли это услвоие
                     env::panic_str("Validator is already updated.");
                 }
 
@@ -1006,7 +1006,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             Some(validator) => {
                 let current_epoch_height = env::epoch_height();
 
-                if validator.last_update_info_epoch_height < current_epoch_height {
+                if validator.last_update_epoch_height < current_epoch_height {
                     match validator.staking_contract_version {
                         StakingContractVersion::Classic => {
                             return validator::ext(validator_account_id.clone())
@@ -1527,7 +1527,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 unstaked_balance,
                 staking_contract_version: _,
                 is_only_for_investment,
-                last_update_info_epoch_height,
+                last_update_epoch_height: last_update_info_epoch_height,
                 last_classic_stake_increasing_epoch_height
             } = validator;
 
@@ -1547,7 +1547,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         validator_info_dto_registry
     }
 
-    fn internal_get_aggregated_info(&self) -> AggregatedInfo {
+    fn internal_get_aggregated_info(&self) -> Aggregated {
         self.assert_epoch_is_synchronized();
 
         let reward_fee_self = if let Some(ref reward_fee) = self.fee_registry.reward_fee {
@@ -1556,7 +1556,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             None
         };
 
-        AggregatedInfo {
+        Aggregated {
             unstaked_balance: self.fund.unstaked_balance.into(),
             staked_balance: self.fund.staked_balance.into(),
             token_total_supply: self.fungible_token.total_supply.into(),
@@ -1952,7 +1952,7 @@ impl StakePool {
 
                 let staking_rewards_near_amount = new_staked_balance - current_staked_balance;
 
-                validator.last_update_info_epoch_height = current_epoch_height;
+                validator.last_update_epoch_height = current_epoch_height;
                 validator.classic_staked_balance = new_staked_balance - validator.investment_staked_balance;
 
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
