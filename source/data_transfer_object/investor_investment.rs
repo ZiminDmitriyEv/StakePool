@@ -4,7 +4,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct InvestorInvestmentInfo {
+pub struct InvestorInvestment {
     pub distribution_registry: Vec<(AccountId, U128)>,
     pub staked_balance: U128
 }

@@ -4,12 +4,12 @@ use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct ValidatorInfo {
+pub struct Validator {
     pub account_id: AccountId,
     pub classic_staked_balance: U128,
     pub investment_staked_balance: U128,
     pub unstaked_balance: U128,
     pub is_only_for_investment: bool,
-    pub last_update_info_epoch_height: EpochHeight,
+    pub last_update_epoch_height: EpochHeight,
     pub last_stake_increasing_epoch_height: Option<EpochHeight>
 }

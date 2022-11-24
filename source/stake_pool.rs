@@ -6,10 +6,10 @@ use near_sdk::json_types::U128;
 use super::account_registry::AccountRegistry;
 use super::cross_contract_call::validator::validator;
 use super::data_transfer_object::aggregated::Aggregated;
-use super::data_transfer_object::investor_investment_info::InvestorInvestmentInfo as InvestorInvestmentInfo;
+use super::data_transfer_object::investor_investment::InvestorInvestment as InvestorInvestmentDto;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
-use super::data_transfer_object::validator_info::ValidatorInfo;
+use super::data_transfer_object::validator::Validator as ValidatorDto;
 use super::delayed_withdrawal::DelayedWithdrawal;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
@@ -215,30 +215,30 @@ impl StakePool {
         self.internal_is_stake_distributed()
     }
 
-    pub fn get_investor_investment_info(&self, account_id: AccountId) -> Option<InvestorInvestmentInfo> {
-        self.internal_get_investor_investment_info(account_id)
+    pub fn get_investor_investment(&self, account_id: AccountId) -> Option<InvestorInvestmentDto> {
+        self.internal_get_investor_investment(account_id)
     }
 
-    pub fn get_validator_info_registry(&self) -> Vec<ValidatorInfo> {
-        self.internal_get_validator_info_registry()
+    pub fn get_validator_registry(&self) -> Vec<ValidatorDto> {
+        self.internal_get_validator_registry()
     }
 
-    pub fn get_aggregated_info(&self) -> Aggregated {
-        self.internal_get_aggregated_info()
+    pub fn get_aggregated(&self) -> Aggregated {
+        self.internal_get_aggregated()
     }
 
     pub fn get_requested_to_withdrawal_fund(&self) -> RequestedToWithdrawalFund {
         self.internal_get_requested_to_withdrawal_fund()
     }
 
-    pub fn get_full_info(&self, account_id: AccountId) -> (
+    pub fn get_full(&self, account_id: AccountId) -> (
         StorageStakingPrice,
         (U128, U128, U128),
         (Option<(U128, U128, U128)>, Option<U128>),
         Option<(u64, U128)>,
         U128
     ) {
-        self.internal_get_full_info(account_id)
+        self.internal_get_full(account_id)
     }
 }
 
@@ -1491,7 +1491,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.fund.is_distributed_on_validators_in_current_epoch
     }
 
-    pub fn internal_get_investor_investment_info(&self, account_id: AccountId) -> Option<InvestorInvestmentInfo> {
+    pub fn internal_get_investor_investment(&self, account_id: AccountId) -> Option<InvestorInvestmentDto> {
         self.assert_epoch_is_synchronized();
 
         let mut distribution_registry: Vec<(AccountId, U128)> = vec![];
@@ -1510,15 +1510,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         Some(
-            InvestorInvestmentInfo {
+            InvestorInvestmentDto {
                 distribution_registry,
                 staked_balance: investor_investment.staked_balance.into()
             }
         )
     }
 
-    fn internal_get_validator_info_registry(&self) -> Vec<ValidatorInfo> {
-        let mut validator_info_dto_registry: Vec<ValidatorInfo> = vec![];
+    fn internal_get_validator_registry(&self) -> Vec<ValidatorDto> {
+        let mut validator_dto_registry: Vec<ValidatorDto> = vec![];
 
         for (account_id, validator) in self.validating.validator_registry.into_iter() {
             let Validator {
@@ -1527,27 +1527,27 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 unstaked_balance,
                 staking_contract_version: _,
                 is_only_for_investment,
-                last_update_epoch_height: last_update_info_epoch_height,
+                last_update_epoch_height,
                 last_classic_stake_increasing_epoch_height
             } = validator;
 
-            validator_info_dto_registry.push(
-                ValidatorInfo {
+            validator_dto_registry.push(
+                ValidatorDto {
                     account_id,
                     classic_staked_balance: classic_staked_balance.into(),
                     investment_staked_balance: investment_staked_balance.into(),
                     unstaked_balance: unstaked_balance.into(),
                     is_only_for_investment,
-                    last_update_info_epoch_height,
+                    last_update_epoch_height,
                     last_stake_increasing_epoch_height: last_classic_stake_increasing_epoch_height
                 }
             );
         }
 
-        validator_info_dto_registry
+        validator_dto_registry
     }
 
-    fn internal_get_aggregated_info(&self) -> Aggregated {
+    fn internal_get_aggregated(&self) -> Aggregated {
         self.assert_epoch_is_synchronized();
 
         let reward_fee_self = if let Some(ref reward_fee) = self.fee_registry.reward_fee {
@@ -1582,7 +1582,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    pub fn internal_get_full_info(&self, account_id: AccountId) -> (
+    pub fn internal_get_full(&self, account_id: AccountId) -> (
         StorageStakingPrice,
         (U128, U128, U128),
         (Option<(U128, U128, U128)>, Option<U128>),
