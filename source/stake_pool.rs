@@ -5,7 +5,15 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::account_registry::AccountRegistry;
 use super::cross_contract_call::validator::validator;
+use super::data_transfer_object::account_balance::AccountBalance;
 use super::data_transfer_object::aggregated::Aggregated;
+use super::data_transfer_object::base_account_balance::BaseAccountBalance;
+use super::data_transfer_object::callback_result::CallbackResult;
+use super::data_transfer_object::delayed_withdrawal_details::DelayedWithdrawalDetails;
+use super::data_transfer_object::epoch_height_registry::EpochHeightRegistry;
+use super::data_transfer_object::fee_registry::FeeRegistry as FeeRegistryDto;
+use super::data_transfer_object::full::Full;
+use super::data_transfer_object::fund::Fund as FundDto;
 use super::data_transfer_object::investor_investment::InvestorInvestment as InvestorInvestmentDto;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
@@ -46,6 +54,7 @@ pub struct StakePool {
 #[near_bindgen]
 impl StakePool {
     /// Call-methods:
+
     #[init]
     pub fn new(
         manager_id: Option<AccountId>,
@@ -179,11 +188,11 @@ impl StakePool {
 
     /// View-methods:
 
-    pub fn get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<(u64, U128)> {
+    pub fn get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<DelayedWithdrawalDetails> {
         self.internal_get_delayed_withdrawal_details(account_id)
     }
 
-    pub fn get_account_balance(&self, account_id: AccountId) -> (Option<(U128, U128, U128)>, Option<U128>) {
+    pub fn get_account_balance(&self, account_id: AccountId) -> AccountBalance {
         self.internal_get_account_balance(account_id)
     }
 
@@ -191,23 +200,19 @@ impl StakePool {
         self.internal_get_total_token_supply().into()
     }
 
-    pub fn get_stakers_quantity(&self) -> u64 {
-        self.internal_get_stakers_quantity()
-    }
-
     pub fn get_storage_staking_price(&self) -> StorageStakingPrice {
         self.internal_get_storage_staking_price()
     }
 
-    pub fn get_fund(&self) -> (U128, U128, U128) {
+    pub fn get_fund(&self) -> FundDto {
         self.internal_get_fund()
     }
 
-    pub fn get_fee_registry(&self) -> FeeRegistry {
+    pub fn get_fee_registry(&self) -> FeeRegistryDto {
         self.internal_get_fee_registry()
     }
 
-    pub fn get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
+    pub fn get_current_epoch_height(&self) -> EpochHeightRegistry {
         self.internal_get_current_epoch_height()
     }
 
@@ -231,13 +236,7 @@ impl StakePool {
         self.internal_get_requested_to_withdrawal_fund()
     }
 
-    pub fn get_full(&self, account_id: AccountId) -> (
-        StorageStakingPrice,
-        (U128, U128, U128),
-        (Option<(U128, U128, U128)>, Option<U128>),
-        Option<(u64, U128)>,
-        U128
-    ) {
+    pub fn get_full(&self, account_id: AccountId) -> Full {
         self.internal_get_full(account_id)
     }
 }
@@ -1379,15 +1378,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             .transfer(near_amount)
     }
 
-    pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<(u64, U128)> {
+    pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<DelayedWithdrawalDetails> {
         self.assert_epoch_is_synchronized();
 
         if let Some(delayed_withdrawal) = self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&account_id) {
             return Some(
-                (
-                    delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
-                    delayed_withdrawal.near_amount.into()
-                )
+                    DelayedWithdrawalDetails {
+                        epoch_quantity_to_take_delayed_withdrawal: delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+                        near_amount: delayed_withdrawal.near_amount.into()
+                }
             );
         }
 
@@ -1398,10 +1397,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
 
         self.fungible_token.total_supply
-    }
-
-    fn internal_get_stakers_quantity(&self) -> u64 {
-        self.fungible_token.accounts_quantity
     }
 
     pub fn internal_get_storage_staking_price(&self) -> StorageStakingPrice {
@@ -1415,7 +1410,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_account_balance(&self, account_id: AccountId) -> (Option<(U128, U128, U128)>, Option<U128>) {
+    fn internal_get_account_balance(&self, account_id: AccountId) -> AccountBalance {
         match self.fungible_token.account_registry.get(&account_id) {
             Some(token_balance) => {
                 let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
@@ -1426,65 +1421,84 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                             env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
                         }
 
-                        (
-                            Some(
-                                (
-                                    token_balance.into(),
-                                    common_near_balance.into(),
-                                    (common_near_balance - investor_investment.staked_balance).into(),
-                                )
+                        AccountBalance {
+                            base_account_balance: Some(
+                                BaseAccountBalance {
+                                    token_balance: token_balance.into(),
+                                    common_near_balance: common_near_balance.into(),
+                                    classic_near_balance: (common_near_balance - investor_investment.staked_balance).into(),
+                                }
                             ),
-                            Some(investor_investment.staked_balance.into())
-                        )
+                            investment_account_balance: Some(investor_investment.staked_balance.into())
+                        }
                     }
                     None => {
-                        (
-                            Some(
-                                (
-                                    token_balance.into(),
-                                    common_near_balance.into(),
-                                    common_near_balance.into(),
-                                )
+                        AccountBalance {
+                            base_account_balance: Some(
+                                BaseAccountBalance {
+                                    token_balance: token_balance.into(),
+                                    common_near_balance: common_near_balance.into(),
+                                    classic_near_balance: common_near_balance.into(),
+                                }
                             ),
-                            None
-                        )
+                            investment_account_balance: None
+                        }
                     }
                 }
             }
             None => {
                 match self.validating.investor_investment_registry.get(&account_id) {
                     Some(investor_investment) => {
-                        (
-                            None,
-                            Some(investor_investment.staked_balance.into())
-                        )
+                        AccountBalance {
+                            base_account_balance: None,
+                            investment_account_balance: Some(investor_investment.staked_balance.into())
+                        }
                     }
                     None => {
-                        (None, None)
+                        AccountBalance {
+                            base_account_balance: None,
+                            investment_account_balance: None
+                        }
                     }
                 }
             }
         }
     }
 
-    fn internal_get_fund(&self) -> (U128, U128, U128) {
+    fn internal_get_fund(&self) -> FundDto {
         self.assert_epoch_is_synchronized();
 
-        (
-            self.fund.unstaked_balance.into(),
-            self.fund.staked_balance.into(),
-            self.fund.get_fund_amount().into()
-        )
+        FundDto {
+            staked_balance: self.fund.staked_balance.into(),
+            unstaked_balance: self.fund.unstaked_balance.into(),
+            common_balance: self.fund.get_fund_amount().into()
+        }
     }
 
-    fn internal_get_fee_registry(&self) -> FeeRegistry {
+    fn internal_get_fee_registry(&self) -> FeeRegistryDto {
         self.assert_epoch_is_synchronized();
 
-        self.fee_registry.clone()
+        let reward_fee = match self.fee_registry.reward_fee {
+            Some(ref reward_fee_) => Some(reward_fee_.self_fee.clone()),
+            None => None
+        };
+
+        let instant_withdraw_fee = match self.fee_registry.instant_withdraw_fee {
+            Some(ref instant_withdraw_fee_) => Some(instant_withdraw_fee_.self_fee.clone()),
+            None => None
+        };
+
+        FeeRegistryDto {
+            reward_fee,
+            instant_withdraw_fee
+        }
     }
 
-    pub fn internal_get_current_epoch_height(&self) -> (EpochHeight, EpochHeight) {
-        (self.current_epoch_height, env::epoch_height())
+    pub fn internal_get_current_epoch_height(&self) -> EpochHeightRegistry {
+        EpochHeightRegistry {
+            pool_epoch_height: self.current_epoch_height,
+            network_epoch_height: env::epoch_height()
+        }
     }
 
     pub fn internal_is_stake_distributed(&self) -> bool {
@@ -1562,7 +1576,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             token_total_supply: self.fungible_token.total_supply.into(),
             token_accounts_quantity: self.fungible_token.accounts_quantity,
             total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
-            rewards_fee: reward_fee_self
+            reward_fee: reward_fee_self
         }
     }
 
@@ -1582,22 +1596,16 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    pub fn internal_get_full(&self, account_id: AccountId) -> (
-        StorageStakingPrice,
-        (U128, U128, U128),
-        (Option<(U128, U128, U128)>, Option<U128>),
-        Option<(u64, U128)>,
-        U128
-    ) {
+    pub fn internal_get_full(&self, account_id: AccountId) -> Full {
         self.assert_epoch_is_synchronized();
 
-        (
-            self.internal_get_storage_staking_price(),
-            self.internal_get_fund(),
-            self.internal_get_account_balance(account_id.clone()),
-            self.internal_get_delayed_withdrawal_details(account_id),
-            self.internal_get_total_token_supply().into()
-        )
+        Full {
+            storage_staking_price: self.internal_get_storage_staking_price(),
+            fund: self.internal_get_fund(),
+            account_balance: self.internal_get_account_balance(account_id.clone()),
+            delayed_withdrawal_details: self.internal_get_delayed_withdrawal_details(account_id),
+            total_token_supply: self.internal_get_total_token_supply().into()
+        }
     }
 
     fn internal_ft_total_supply(&self) -> Balance {
@@ -1738,7 +1746,7 @@ impl StakePool {
         attached_deposit: Balance,
         refundable_near_amount: Balance,
         token_amount: Balance
-    ) {
+    ) -> bool {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -1791,10 +1799,14 @@ impl StakePool {
                     Promise::new(predecessor_account_id)
                         .transfer(refundable_near_amount);
                 }
+
+                true
             }
             _ => {
                 Promise::new(predecessor_account_id)
                     .transfer(attached_deposit);
+
+                false
             }
         }
     }
@@ -1840,7 +1852,7 @@ impl StakePool {
         near_amount: Balance,
         stake_decreasing_type: StakeDecreasingType,
         refundable_near_amount: Balance
-    ) -> (bool, EpochHeight) {
+    ) -> CallbackResult {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -1885,16 +1897,22 @@ impl StakePool {
                 validator.unstaked_balance += near_amount;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
-                (true, env::epoch_height())
+                CallbackResult {
+                    is_success: true,
+                    network_epoch_height: env::epoch_height()
+                }
             }
             _ => {
-                (false, env::epoch_height())
+                CallbackResult {
+                    is_success: false,
+                    network_epoch_height: env::epoch_height()
+                }
             }
         }
     }
 
     #[private]
-    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> (bool, EpochHeight) {  // TODO Может быть, ставить счетчик на количество валиаторов, с которыз нужно снимать стейк, чтобы проверять.
+    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> CallbackResult {  // TODO Может быть, ставить счетчик на количество валиаторов, с которыз нужно снимать стейк, чтобы проверять.
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -1913,10 +1931,16 @@ impl StakePool {
                 validator.unstaked_balance = 0;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
-                (true, env::epoch_height())
+                CallbackResult {
+                    is_success: true,
+                    network_epoch_height: env::epoch_height()
+                }
             }
             _ => {
-                (false, env::epoch_height())
+                CallbackResult {
+                    is_success: false,
+                    network_epoch_height: env::epoch_height()
+                }
             }
         }
     }
@@ -1927,7 +1951,7 @@ impl StakePool {
         &mut self,
         validator_account_id: AccountId,
         current_epoch_height: EpochHeight
-    ) -> (bool, EpochHeight) {
+    ) -> CallbackResult {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -1960,10 +1984,16 @@ impl StakePool {
 
                 self.previous_epoch_rewards_from_validators_near_amount += staking_rewards_near_amount;
 
-                (true, env::epoch_height())
+                CallbackResult {
+                    is_success: true,
+                    network_epoch_height: env::epoch_height()
+                }
             }
             _ => {
-                (false, env::epoch_height())
+                CallbackResult {
+                    is_success: false,
+                    network_epoch_height: env::epoch_height()
+                }
             }
         }
     }

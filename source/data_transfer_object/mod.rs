@@ -1,4 +1,12 @@
+pub(crate) mod account_balance;
 pub(crate) mod aggregated;
+pub(crate) mod base_account_balance;
+pub(crate) mod callback_result;
+pub(crate) mod delayed_withdrawal_details;
+pub(crate) mod epoch_height_registry;
+pub(crate) mod fee_registry;
+pub(crate) mod full;
+pub(crate) mod fund;
 pub(crate) mod investor_investment;
 pub(crate) mod requested_to_withdrawal_fund;
 pub(crate) mod storage_staking_price;

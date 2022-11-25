@@ -4,7 +4,7 @@ use crate::fee::Fee;
 
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct Aggregated {                                         // TODO Переназвать
+pub struct Aggregated {
     /// Near amount required for distribution on validators.
     pub unstaked_balance: U128,
     /// Near amount already distributed on validators.
@@ -16,5 +16,5 @@ pub struct Aggregated {                                         // TODO Пере
     /// Near amount of rewards from validators.
     pub total_rewards_from_validators_near_amount: U128,
     /// Fee charged by the pool when receiving rewards from validators.
-    pub rewards_fee: Option<Fee>
+    pub reward_fee: Option<Fee>
 }
