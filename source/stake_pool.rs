@@ -78,8 +78,8 @@ impl StakePool {
 
     /// Stake process.
     #[payable]
-    pub fn deposit(&mut self, near_amount: U128) {
-        self.internal_deposit(near_amount.into());
+    pub fn deposit(&mut self, near_amount: U128) -> PromiseOrValue<()> {
+        self.internal_deposit(near_amount.into())
     }
 
     /// Stake process directly to the validator.
@@ -362,29 +362,39 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
+        if near_amount == 0 {
+            env::panic_str("Insufficient near amount.");
+        }
+
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut near_amount = env::attached_deposit();
+        let attached_deposit = env::attached_deposit();
+
+        let mut storage_staking_price_per_additional_account: Balance = 0;
 
         let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
             Some(token_balance_) => token_balance_,
             None => {
-                let storage_staking_price_per_additional_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
-                if near_amount < storage_staking_price_per_additional_account {
-                    env::panic_str("Insufficient near deposit.");
-                }
-                near_amount -= storage_staking_price_per_additional_account;
+                storage_staking_price_per_additional_account += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
 
                 0
             }
         };
-        if near_amount == 0 {
+        if attached_deposit <= storage_staking_price_per_additional_account {
             env::panic_str("Insufficient near deposit.");
         }
 
+        let available_for_staking_near_amount = attached_deposit - storage_staking_price_per_additional_account;
+
+        if near_amount > available_for_staking_near_amount {
+            env::panic_str("Insufficient near deposit.");
+        }
+
+        let refundable_near_amount = available_for_staking_near_amount - near_amount;
+
         let token_amount = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
-            env::panic_str("Insufficient near deposit.");
+            env::panic_str("Insufficient near amount.");
         }
 
         if self.fund.is_distributed_on_validators_in_current_epoch && self.validating.preffered_validtor.is_some() {
@@ -405,6 +415,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                                         predecessor_account_id,
                                                         preffered_validator_account_id.clone(),
                                                         near_amount,
+                                                        refundable_near_amount,
                                                         token_amount,
                                                         env::epoch_height()
                                                     )
@@ -414,21 +425,26 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                             }
                         }
                         None => {
-                            env::panic_str("Object should exist.");
+                            env::panic_str("Nonexecutable code. Object must exist.");
                         }
                     }
                 }
                 None => {
-                    env::panic_str("Object should exist.");
+                    env::panic_str("Nonexecutable code. Object must exist.");
                 }
             }
         } else {
-            token_balance += token_amount;
-
             self.fund.unstaked_balance += near_amount;
             self.fungible_token.total_supply += token_amount;
+
+            token_balance += token_amount;
             if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance) {
                 self.fungible_token.accounts_quantity += 1;
+            }
+
+            if refundable_near_amount > 0 {
+                Promise::new(predecessor_account_id)
+                    .transfer(refundable_near_amount);
             }
 
             PromiseOrValue::Value(())
@@ -469,7 +485,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if let None = self.fungible_token.account_registry.get(&predecessor_account_id) {
             storage_staking_price_per_additional_accounts += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
         };
-
 
         if attached_deposit <= storage_staking_price_per_additional_accounts {
             env::panic_str("Insufficient near deposit.");
@@ -551,7 +566,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance_);
                             }
                             None => {
-                                env::panic_str("Object should exist.");
+                                env::panic_str("Nonexecutable code. Object must exist.");
                             }
                         }
                     }
@@ -564,7 +579,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                         self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance_);
                     }
                     None => {
-                        env::panic_str("Object should exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 }
             }
@@ -1074,7 +1089,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance);
                             }
                             None => {
-                                env::panic_str("Object should exist.");
+                                env::panic_str("Nonexecutable code. Object must exist.");
                             }
                         }
                     }
@@ -1087,7 +1102,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                         self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
                     }
                     None => {
-                        env::panic_str("Object should exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 }
             }
@@ -1701,6 +1716,7 @@ impl StakePool {
         predecessor_account_id: AccountId,
         validator_account_id: AccountId,
         near_amount: Balance,
+        refundable_near_amount: Balance,
         token_amount: Balance,
         current_epoch_height: EpochHeight
     ) {
@@ -1713,7 +1729,7 @@ impl StakePool {
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
                 validator.classic_staked_balance += near_amount;
@@ -1738,6 +1754,11 @@ impl StakePool {
         token_balance += token_amount;
         self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         self.fungible_token.total_supply += token_amount;
+
+        if refundable_near_amount > 0 {
+            Promise::new(predecessor_account_id)
+                .transfer(refundable_near_amount);
+        }
     }
 
     #[private]
@@ -1759,7 +1780,7 @@ impl StakePool {
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
                 validator.investment_staked_balance += near_amount;
@@ -1768,7 +1789,7 @@ impl StakePool {
                 let mut investor_investment = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
                     Some(investor_investment_) => investor_investment_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
                 let mut staked_balance = match investor_investment.distribution_registry.get(&validator_account_id) {
@@ -1833,7 +1854,7 @@ impl StakePool {
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
                 validator.classic_staked_balance += near_amount;
@@ -1865,7 +1886,7 @@ impl StakePool {
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
 
@@ -1878,7 +1899,7 @@ impl StakePool {
                         let mut investment_withdrawal = match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
                             Some(investment_withdrawal_) => investment_withdrawal_,
                             None => {
-                                env::panic_str("Nonexecutable code. Account must exist.");
+                                env::panic_str("Nonexecutable code. Object must exist.");
                             }
                         };
                         if near_amount < investment_withdrawal.near_amount {
@@ -1925,7 +1946,7 @@ impl StakePool {
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
 
@@ -1971,7 +1992,7 @@ impl StakePool {
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
                     None => {
-                        env::panic_str("Nonexecutable code. Account must exist.");
+                        env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
 
