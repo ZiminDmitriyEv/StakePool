@@ -1028,7 +1028,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                         StakingContractVersion::Classic => {
                             validator::ext(validator_account_id.clone())
                                 // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
-                                .get_account_staked_balance(env::current_account_id())
+                                .get_account_total_balance(env::current_account_id())
                                 .then(
                                     Self::ext(env::current_account_id())
                                         .update_validator_callback(validator_account_id, current_epoch_height)
@@ -2115,3 +2115,6 @@ impl StakePool {
 
 
 // НАписать DecreaseValidatorStake относительно менеджера, причем это не должно влиять на возможность снятия средств пользователями.
+
+
+// Проверить, что Методы для кросскола, правильно интегрированы в логику, то есть, где get_account_total_balance/get_account_staked_balance. Проверить все методы.!!!!!!!1
