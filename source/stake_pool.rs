@@ -78,15 +78,15 @@ impl StakePool {
 
     /// Stake process.
     #[payable]
-    pub fn deposit(&mut self) {
-        self.internal_deposit();
+    pub fn deposit(&mut self, near_amount: U128) {
+        self.internal_deposit(near_amount.into());
     }
 
     /// Stake process directly to the validator.
     /// Available only for Investor.
     #[payable]
-    pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) {
-        self.internal_deposit_on_validator(near_amount.into(), validator_account_id);
+    pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) -> Promise {
+        self.internal_deposit_on_validator(near_amount.into(), validator_account_id)
     }
 
     /// Instant unstake process.
@@ -358,7 +358,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         stake_pool
     }
 
-    fn internal_deposit(&mut self) {
+    fn internal_deposit(&mut self, near_amount: Balance) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -387,28 +387,29 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Insufficient near deposit.");
         }
 
-        if self.fund.is_distributed_on_validators_in_current_epoch
-            && self.validating.preffered_validtor.is_some() {
+        if self.fund.is_distributed_on_validators_in_current_epoch && self.validating.preffered_validtor.is_some() {
             match self.validating.preffered_validtor {
                 Some(ref preffered_validator_account_id) => {
                     match self.validating.validator_registry.get(preffered_validator_account_id) {
                         Some(validator) => {
                             match validator.staking_contract_version {
                                 StakingContractVersion::Classic => {
-                                    validator::ext(preffered_validator_account_id.clone())
-                                        .with_attached_deposit(near_amount)
-                                        // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
-                                        .deposit_and_stake()
-                                        .then(
-                                            Self::ext(env::current_account_id())
-                                                .deposit_callback(
-                                                    predecessor_account_id,
-                                                    preffered_validator_account_id.clone(),
-                                                    near_amount,
-                                                    token_amount,
-                                                    env::epoch_height()
-                                                )
-                                        );
+                                    PromiseOrValue::Promise(
+                                        validator::ext(preffered_validator_account_id.clone())
+                                            .with_attached_deposit(near_amount)
+                                            // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                            .deposit_and_stake()
+                                            .then(
+                                                Self::ext(env::current_account_id())
+                                                    .deposit_callback(
+                                                        predecessor_account_id,
+                                                        preffered_validator_account_id.clone(),
+                                                        near_amount,
+                                                        token_amount,
+                                                        env::epoch_height()
+                                                    )
+                                            )
+                                    )
                                 }
                             }
                         }
@@ -429,10 +430,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance) {
                 self.fungible_token.accounts_quantity += 1;
             }
+
+            PromiseOrValue::Value(())
         }
     }
 
-    fn internal_deposit_on_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) {
+    fn internal_deposit_on_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> Promise {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -499,7 +502,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 refundable_near_amount,
                                 token_amount
                             )
-                    );
+                    )
             }
         }
     }
@@ -1008,7 +1011,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 if validator.last_update_epoch_height < current_epoch_height {
                     match validator.staking_contract_version {
                         StakingContractVersion::Classic => {
-                            return validator::ext(validator_account_id.clone())
+                            validator::ext(validator_account_id.clone())
                                 // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                 .get_account_staked_balance(env::current_account_id())
                                 .then(
@@ -1017,9 +1020,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 )
                         }
                     }
+                } else {
+                    env::panic_str("Validator is already updated.");
                 }
-
-                env::panic_str("Validator is already updated.");
             }
             None => {
                 env::panic_str("Validator account is not registered yet.");
