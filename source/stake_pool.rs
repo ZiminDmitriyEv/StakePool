@@ -38,6 +38,32 @@ construct_uint! {
     pub struct U256(4);
 }
 
+
+
+
+
+// БАГ Положили только инвестиции, но снялия делаед просто.
+// БАГ все значения после депозитов по нулям
+
+
+
+
+// ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
+// fn internal_add_validator(
+
+// ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
+// fn internal_change_validator_investment_context
+
+// ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
+//     fn internal_change_preffered_validator(
+
+
+// Проставить ЗПроимизОВалуе на буул. То есть, не (), а Буул
+
+
+
+
+
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить там, где Мэпы и сеты, посмотреть, где нужно !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
 pub struct StakePool {
@@ -1050,65 +1076,69 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_desynchronized();
         self.assert_authorized_management_only_by_manager();
 
-        if self.validating.quantity_of_validators_updated_in_current_epoch != self.validating.validators_quantity {
-            env::panic_str("Some validators are not updated.");
-        }
-
         let current_epoch_height = env::epoch_height();
 
-        if Self::epoch_is_right(current_epoch_height)
-            && (self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount > 0
-                || self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount > 0) {
-                env::panic_str("Some funds are not unstaked from validators.");
-        }
+        if self.validating.validators_quantity > 0 {
+            if (self.validating.quantity_of_validators_updated_in_current_epoch / self.validating.validators_quantity == 0)
+                || (self.validating.quantity_of_validators_updated_in_current_epoch % self.validating.validators_quantity != 0) {
+                env::panic_str("Some validators are not updated.");
+            }
 
-        self.fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
-        self.fund.is_distributed_on_validators_in_current_epoch = false;
-        self.validating.quantity_of_validators_updated_in_current_epoch = 0;
-        self.current_epoch_height = current_epoch_height;
-        self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;                               // TODO переназвать, Убрать в впомагательные параметры.
+            if Self::epoch_is_right(current_epoch_height)
+                && (self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount > 0
+                    || self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount > 0) {
+                    env::panic_str("Some funds are not unstaked from validators.");
+            }
 
-        let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
-            self.previous_epoch_rewards_from_validators_near_amount
-        );
+            self.fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
+            self.validating.quantity_of_validators_updated_in_current_epoch = 0;
+            self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;     // TODO переназвать, Убрать в впомагательные параметры.
 
-        if let Some(ref reward_fee) = self.fee_registry.reward_fee {
-            let mut reward_fee_self_token_amount = reward_fee.self_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
-            if reward_fee_self_token_amount != 0 {
-                self.fungible_token.total_supply += reward_fee_self_token_amount;
+            let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
+                self.previous_epoch_rewards_from_validators_near_amount
+            );
 
-                if let Some(ref reward_fee_partner) = reward_fee.partner_fee {
-                    let reward_fee_partner_token_amount = reward_fee_partner.multiply(reward_fee_self_token_amount);
-                    if reward_fee_partner_token_amount != 0 {
-                        reward_fee_self_token_amount -= reward_fee_partner_token_amount;
+            if let Some(ref reward_fee) = self.fee_registry.reward_fee {
+                let mut reward_fee_self_token_amount = reward_fee.self_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
+                if reward_fee_self_token_amount != 0 {
+                    self.fungible_token.total_supply += reward_fee_self_token_amount;
 
-                        match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
-                            Some(mut token_balance) => {
-                                token_balance += reward_fee_partner_token_amount;
+                    if let Some(ref reward_fee_partner) = reward_fee.partner_fee {
+                        let reward_fee_partner_token_amount = reward_fee_partner.multiply(reward_fee_self_token_amount);
+                        if reward_fee_partner_token_amount != 0 {
+                            reward_fee_self_token_amount -= reward_fee_partner_token_amount;
 
-                                self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance);
-                            }
-                            None => {
-                                env::panic_str("Nonexecutable code. Object must exist.");
+                            match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
+                                Some(mut token_balance) => {
+                                    token_balance += reward_fee_partner_token_amount;
+
+                                    self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance);
+                                }
+                                None => {
+                                    env::panic_str("Nonexecutable code. Object must exist.");
+                                }
                             }
                         }
                     }
-                }
 
-                match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
-                    Some(mut token_balance) => {
-                        token_balance += reward_fee_self_token_amount;
+                    match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
+                        Some(mut token_balance) => {
+                            token_balance += reward_fee_self_token_amount;
 
-                        self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
-                    }
-                    None => {
-                        env::panic_str("Nonexecutable code. Object must exist.");
+                            self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
+                        }
+                        None => {
+                            env::panic_str("Nonexecutable code. Object must exist.");
+                        }
                     }
                 }
             }
+
+            self.previous_epoch_rewards_from_validators_near_amount = 0;
         }
 
-        self.previous_epoch_rewards_from_validators_near_amount = 0;
+        self.fund.is_distributed_on_validators_in_current_epoch = false;
+        self.current_epoch_height = current_epoch_height;
     }
 
     fn internal_add_validator(
@@ -1638,7 +1668,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn convert_near_amount_to_token_amount(&self, near_amount: Balance) -> Balance {
-        if self.fund.get_fund_amount() == 0 {
+        if self.fund.get_fund_amount() == 0 || near_amount == 0 {
             return near_amount;
         }
 
@@ -1650,7 +1680,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn convert_token_amount_to_near_amount(&self, token_amount: Balance) -> Balance {      // TOD вот здесь обратить внимание. Правильно ли стоит проверка в случае, если здесь ноль, а неаров не ноль. ТАкое может быть в контексте получения и вывда ревардов
-        if self.fungible_token.total_supply == 0 {
+        if self.fungible_token.total_supply == 0 || token_amount == 0 {
             return token_amount
         }
 
