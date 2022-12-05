@@ -11,5 +11,5 @@ pub struct Validator {
     pub unstaked_balance: U128,
     pub is_only_for_investment: bool,
     pub last_update_epoch_height: EpochHeight,
-    pub last_stake_increasing_epoch_height: Option<EpochHeight>
+    pub last_classic_stake_increasing_epoch_height: Option<EpochHeight>
 }

@@ -43,8 +43,6 @@ construct_uint! {
 
 
 // БАГ Положили только инвестиции, но снялия делаед просто.
-// БАГ все значения после депозитов по нулям
-
 
 
 
@@ -1601,7 +1599,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     unstaked_balance: unstaked_balance.into(),
                     is_only_for_investment,
                     last_update_epoch_height,
-                    last_stake_increasing_epoch_height: last_classic_stake_increasing_epoch_height
+                    last_classic_stake_increasing_epoch_height
                 }
             );
         }

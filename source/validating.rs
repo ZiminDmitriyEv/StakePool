@@ -11,7 +11,7 @@ use super::staking_contract_version::StakingContractVersion;
 pub struct Validating {
     pub validator_registry: UnorderedMap<AccountId, Validator>,
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
-    pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,
+    pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,                 // TODO переместить в отдельный модуль?.
     pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
     pub preffered_validtor: Option<AccountId>,
     pub quantity_of_validators_updated_in_current_epoch: u64,
