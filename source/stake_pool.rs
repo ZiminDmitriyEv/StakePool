@@ -44,7 +44,7 @@ construct_uint! {
 
 
 
-
+// 1
 // ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
 // fn internal_add_validator(
 
@@ -54,12 +54,8 @@ construct_uint! {
 // ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
 //     fn internal_change_preffered_validator(
 
-
-
-
-
-
-
+// 2
+// Первый добавленный валидатор Обязательно должен быть префферед (чтобы всегда существовал. То есть, убрать возможность убирать префферед). УБрать условие на проверку, префферед или нет при Депозите после изДистрибьютед.
 
 
 
@@ -1377,6 +1373,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
+
+        if self.fund.is_distributed_on_validators_in_current_epoch {
+            env::panic_str("Fund has already been distributed.");
+        }
 
         self.fund.is_distributed_on_validators_in_current_epoch = true;
     }
