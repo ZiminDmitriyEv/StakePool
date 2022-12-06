@@ -4,9 +4,9 @@ use super::staking_contract_version::StakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Validator {
+    pub unstaked_balance: Balance,
     pub classic_staked_balance: Balance,
     pub investment_staked_balance: Balance,
-    pub unstaked_balance: Balance,
     pub staking_contract_version: StakingContractVersion,
     /// Validator, which is needed ONLY for investment purpose.
     /// The pool should not distribute unstaked balance to validators with a TRUE value,
@@ -26,13 +26,17 @@ impl Validator {
         is_only_for_investment: bool
     ) -> Self {
         Self {
+            unstaked_balance: 0,
             classic_staked_balance: 0,
             investment_staked_balance: 0,
-            unstaked_balance: 0,
             staking_contract_version,
             is_only_for_investment,
             last_update_epoch_height: env::epoch_height(),
             last_classic_stake_increasing_epoch_height: None
         }
+    }
+
+    pub fn get_staked_balance(&self) -> Balance {
+        self.classic_staked_balance + self.investment_staked_balance
     }
 }

@@ -39,13 +39,6 @@ construct_uint! {
 }
 
 
-
-
-
-// БАГ Положили только инвестиции, но снялия делаед просто.
-
-
-
 // ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
 // fn internal_add_validator(
 
@@ -54,10 +47,6 @@ construct_uint! {
 
 // ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
 //     fn internal_change_preffered_validator(
-
-
-// Проставить ЗПроимизОВалуе на буул. То есть, не (), а Буул
-
 
 
 
@@ -458,7 +447,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 }
             }
         } else {
-            self.fund.unstaked_balance += near_amount;
+            self.fund.classic_unstaked_balance += near_amount;
             self.fungible_token.total_supply += token_amount;
 
             token_balance += token_amount;
@@ -614,15 +603,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Insufficient token amount.");
         }
 
-        if near_amount > self.fund.unstaked_balance {
+        if near_amount > self.fund.classic_unstaked_balance {
             env::panic_str("Token amount exceeded the available unstaked near balance.");
         }
 
-        self.fund.unstaked_balance -= near_amount;
+        self.fund.classic_unstaked_balance -= near_amount;
 
         if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
-            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
+            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -662,11 +651,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Insufficient token amount.");
         }
 
-        if near_amount > self.fund.staked_balance {
+        if near_amount > self.fund.classic_staked_balance {
             env::panic_str("Token amount exceeded the available staked near balance.");
         }
 
-        self.fund.staked_balance -= near_amount;
+        self.fund.classic_staked_balance -= near_amount;
         let mut near_refundable_deposit = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawal {
@@ -727,7 +716,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if near_amount == 0 {
             env::panic_str("Insufficient near amount.");
         }
-        if near_amount > self.fund.staked_balance {
+        if near_amount > self.fund.investment_staked_balance {
             env::panic_str("Token amount exceeded the available staked near balance.");
         }
 
@@ -797,7 +786,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
-        self.fund.staked_balance -= near_amount;
+        self.fund.investment_staked_balance -= near_amount;
         match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(
             &predecessor_account_id,
             &DelayedWithdrawal {
@@ -900,8 +889,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Insufficient near amount.");
         }
 
-        if self.fund.unstaked_balance == 0
-            || !(1..=self.fund.unstaked_balance).contains(&near_amount) {
+        if self.fund.classic_unstaked_balance == 0
+            || !(1..=self.fund.classic_unstaked_balance).contains(&near_amount) {
                 env::panic_str("Near amount exceeded the available unstaked near balance.");
         }
 
@@ -1088,7 +1077,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     env::panic_str("Some funds are not unstaked from validators.");
             }
 
-            self.fund.staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
+            self.fund.classic_staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
             self.validating.quantity_of_validators_updated_in_current_epoch = 0;
             self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;     // TODO переназвать, Убрать в впомагательные параметры.
 
@@ -1515,9 +1504,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
 
         FundDto {
-            staked_balance: self.fund.staked_balance.into(),
-            unstaked_balance: self.fund.unstaked_balance.into(),
-            common_balance: self.fund.get_fund_amount().into()
+            classic_unstaked_balance: self.fund.classic_unstaked_balance.into(),
+            classic_staked_balance: self.fund.classic_staked_balance.into(),
+            investment_staked_balance: self.fund.investment_staked_balance.into(),
+            common_staked_balance: self.fund.get_staked_balance().into(),
+            common_balance: self.fund.get_common_balance().into()
         }
     }
 
@@ -1582,9 +1573,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         for (account_id, validator) in self.validating.validator_registry.into_iter() {
             let Validator {
+                unstaked_balance,
                 classic_staked_balance,
                 investment_staked_balance,
-                unstaked_balance,
                 staking_contract_version: _,
                 is_only_for_investment,
                 last_update_epoch_height,
@@ -1593,10 +1584,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
             validator_dto_registry.push(
                 ValidatorDto {
+                    unstaked_balance: unstaked_balance.into(),
                     account_id,
                     classic_staked_balance: classic_staked_balance.into(),
                     investment_staked_balance: investment_staked_balance.into(),
-                    unstaked_balance: unstaked_balance.into(),
                     is_only_for_investment,
                     last_update_epoch_height,
                     last_classic_stake_increasing_epoch_height
@@ -1617,8 +1608,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         };
 
         Aggregated {
-            unstaked_balance: self.fund.unstaked_balance.into(),
-            staked_balance: self.fund.staked_balance.into(),
+            unstaked_balance: self.fund.classic_unstaked_balance.into(),
+            staked_balance: self.fund.get_staked_balance().into(),
             token_total_supply: self.fungible_token.total_supply.into(),
             token_accounts_quantity: self.fungible_token.accounts_quantity,
             total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
@@ -1666,14 +1657,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     }
 
     fn convert_near_amount_to_token_amount(&self, near_amount: Balance) -> Balance {
-        if self.fund.get_fund_amount() == 0 || near_amount == 0 {
+        if self.fund.get_common_balance() == 0 || near_amount == 0 {
             return near_amount;
         }
 
         (
             U256::from(near_amount)
             * U256::from(self.fungible_token.total_supply)
-            / U256::from(self.fund.get_fund_amount())             // TODO Проверить Округление
+            / U256::from(self.fund.get_common_balance())             // TODO Проверить Округление
         ).as_u128()
     }
 
@@ -1684,7 +1675,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         (
             U256::from(token_amount)
-            * U256::from(self.fund.get_fund_amount())             // TODO Проверить Округление
+            * U256::from(self.fund.get_common_balance())             // TODO Проверить Округление
             / U256::from(self.fungible_token.total_supply)
         ).as_u128()
     }
@@ -1764,10 +1755,10 @@ impl StakePool {
                 validator.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
-                self.fund.staked_balance += near_amount;
+                self.fund.classic_staked_balance += near_amount;
             }
             _ => {
-                self.fund.unstaked_balance += near_amount;
+                self.fund.classic_unstaked_balance += near_amount;
             }
         }
 
@@ -1845,7 +1836,7 @@ impl StakePool {
                 self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
                 self.fungible_token.total_supply += token_amount;
 
-                self.fund.staked_balance += near_amount;
+                self.fund.investment_staked_balance += near_amount;
 
                 if refundable_near_amount > 0 {
                     Promise::new(predecessor_account_id)
@@ -1876,8 +1867,8 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(_) => {
-                self.fund.unstaked_balance -= near_amount;
-                self.fund.staked_balance += near_amount;
+                self.fund.classic_unstaked_balance -= near_amount;
+                self.fund.classic_staked_balance += near_amount;
 
                 let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
                     Some(validator_) => validator_,
@@ -2024,12 +2015,10 @@ impl StakePool {
                     }
                 };
 
-                let current_staked_balance = validator.classic_staked_balance + validator.investment_staked_balance;
-
-                let staking_rewards_near_amount = new_staked_balance - current_staked_balance;
+                let staking_rewards_near_amount = new_staked_balance - validator.get_staked_balance();
 
                 validator.last_update_epoch_height = current_epoch_height;
-                validator.classic_staked_balance = new_staked_balance - validator.investment_staked_balance;
+                validator.classic_staked_balance += staking_rewards_near_amount;
 
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
                 self.validating.quantity_of_validators_updated_in_current_epoch += 1;

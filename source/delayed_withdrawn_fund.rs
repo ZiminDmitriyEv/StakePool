@@ -15,9 +15,9 @@ pub struct DelayedWithdrawnFund {
     /// AccountId - validator account id.
     /// Balance - near amount.
     pub investment_withdrawal_registry: LookupMap<AccountId, InvestmentWithdrawal>,
-    /// Classic near amount to be requested from the validator.
+    /// Classic near amount needed to request from the validator.
     pub needed_to_request_classic_near_amount: Balance,
-    /// Investment near amount to be requested from the validator.
+    /// Investment near amount needed to request from the validator.
     pub needed_to_request_investment_near_amount: Balance,                                          // TODO вынести в отдельную структуру с реестрои выше?
     /// Near balance available for withdrawal after passing the delayed withdrawal process.
     pub balance: Balance,          // TODO посмотреть в свойствах и в методах, стоит ли именить near_balance на balance и подобное, то есть, near_ уже может быть в контексте.

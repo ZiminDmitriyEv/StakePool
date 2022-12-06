@@ -4,27 +4,32 @@ use super::delayed_withdrawn_fund::DelayedWithdrawnFund;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Fund {
-    pub unstaked_balance: Balance,
-    pub staked_balance: Balance,
-    pub delayed_withdrawn_fund: DelayedWithdrawnFund,
-    /// Not used yet.
+    pub classic_unstaked_balance: Balance,
+    pub classic_staked_balance: Balance,
     /// Additional funds to ensure the possibility of instant withdrawal.
-    pub liquidity_balance: Balance,
+    pub classic_liquidity_balance: Balance,
+    pub investment_staked_balance: Balance,
+    pub delayed_withdrawn_fund: DelayedWithdrawnFund,
     pub is_distributed_on_validators_in_current_epoch: bool         // TODO вынести в ВспомогательныеПараметры такой и подобные параметры или просто переназвать
 }
 
 impl Fund {
     pub fn new() -> Self {
         Self {
-            unstaked_balance: 0,
-            staked_balance: 0,
+            classic_unstaked_balance: 0,
+            classic_staked_balance: 0,
+            classic_liquidity_balance: 0,
+            investment_staked_balance: 0,
             delayed_withdrawn_fund: DelayedWithdrawnFund::new(),
-            liquidity_balance: 0,
             is_distributed_on_validators_in_current_epoch: false
         }
     }
 
-    pub fn get_fund_amount(&self) -> Balance {
-        self.unstaked_balance + self.staked_balance
+    pub fn get_staked_balance(&self) -> Balance {
+        self.classic_staked_balance + self.investment_staked_balance
+    }
+
+    pub fn get_common_balance(&self) -> Balance {
+        self.classic_unstaked_balance + self.classic_staked_balance + self.investment_staked_balance
     }
 }
