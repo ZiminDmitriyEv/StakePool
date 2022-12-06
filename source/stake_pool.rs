@@ -39,6 +39,12 @@ construct_uint! {
 }
 
 
+
+
+
+
+
+
 // ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
 // fn internal_add_validator(
 
@@ -47,6 +53,18 @@ construct_uint! {
 
 // ЗДЕСЬ ЕСЛИ валидатор для инвестиций, он не может быть префферед
 //     fn internal_change_preffered_validator(
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -656,15 +674,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fund.classic_staked_balance -= near_amount;
-        let mut near_refundable_deposit = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(
-            &predecessor_account_id,
-            &DelayedWithdrawal {
-                near_amount,
-                started_epoch_height: env::epoch_height()
-            }
-        ) {
-            Some(_) => {
-                env::panic_str("Delayed withdrawal account is already registered.");
+        let (mut near_refundable_deposit, mut delayed_withdrawal) = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
+            Some(mut delayed_withdrawal_) => {
+                delayed_withdrawal_.started_epoch_height = env::epoch_height();
+
+                (env::attached_deposit(), delayed_withdrawal_)
             }
             None => {
                 let near_deposit = env::attached_deposit();
@@ -675,9 +689,17 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     env::panic_str("Insufficient near deposit.");
                 }
 
-                near_deposit - storage_staking_price_per_additional_delayed_withdrawal
+                (
+                    near_deposit - storage_staking_price_per_additional_delayed_withdrawal,
+                    DelayedWithdrawal {
+                        near_amount: 0,
+                        started_epoch_height: env::epoch_height()
+                    }
+                )
             }
         };
+        delayed_withdrawal.near_amount += near_amount;
+        self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
         token_balance -= token_amount;
@@ -787,15 +809,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fund.investment_staked_balance -= near_amount;
-        match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(
-            &predecessor_account_id,
-            &DelayedWithdrawal {
-                near_amount,
-                started_epoch_height: env::epoch_height()
-            }
-        ) {
-            Some(_) => {
-                env::panic_str("Delayed withdrawal account is already registered.");
+        let mut delayed_withdrawal = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
+            Some(mut delayed_withdrawal_) => {
+                delayed_withdrawal_.started_epoch_height = env::epoch_height();
+
+                delayed_withdrawal_
             }
             None => {
                 let storage_staking_price_per_additional_account =
@@ -804,8 +822,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     env::panic_str("Insufficient near deposit.");
                 }
                 near_refundable_deposit -= storage_staking_price_per_additional_account;
+
+                DelayedWithdrawal {
+                    near_amount: 0,
+                    started_epoch_height: env::epoch_height()
+                }
             }
-        }
+        };
+        delayed_withdrawal.near_amount += near_amount;
+        self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
 
         investment_withdrawal.near_amount += near_amount;
         self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal);
