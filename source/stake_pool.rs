@@ -40,7 +40,7 @@ construct_uint! {
 
 
 
-
+// https://explorer.testnet.near.org/transactions/2jhGh7qNzqCVnQ3oPM6cvTKscUxvPyjYsaJyQCooMsuG СНОВА ОШИБКА. ТЕСТИРОВАТь
 
 
 
@@ -58,8 +58,9 @@ construct_uint! {
 // Первый добавленный валидатор Обязательно должен быть префферед (чтобы всегда существовал. То есть, убрать возможность убирать префферед). УБрать условие на проверку, префферед или нет при Депозите после изДистрибьютед.
 
 
+// Документация
 
-
+// 1. Метод, отдающий необходимое число для стораджстейкинга для конкретного юзера для конкретного метода.
 
 
 
@@ -105,8 +106,14 @@ impl StakePool {
 
     /// Stake process.
     #[payable]
-    pub fn deposit(&mut self, near_amount: U128) -> PromiseOrValue<()> {
-        self.internal_deposit(near_amount.into())
+    pub fn deposit_1(&mut self) -> PromiseOrValue<()> {
+        self.internal_deposit_1()
+    }
+
+    /// Stake process.
+    #[payable]
+    pub fn deposit_2(&mut self, near_amount: U128) -> PromiseOrValue<()> {
+        self.internal_deposit_2(near_amount.into())
     }
 
     /// Stake process directly to the validator.
@@ -385,7 +392,84 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         stake_pool
     }
 
-    fn internal_deposit(&mut self, near_amount: Balance) -> PromiseOrValue<()> {
+    fn internal_deposit_1(&mut self) -> PromiseOrValue<()> {
+        Self::assert_gas_is_enough();
+        self.assert_epoch_is_synchronized();
+
+        let predecessor_account_id = env::predecessor_account_id();
+
+        let mut near_amount = env::attached_deposit();
+
+        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => token_balance_,
+            None => {
+                let storage_staking_price_per_additional_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+                if near_amount < storage_staking_price_per_additional_account {
+                    env::panic_str("Insufficient near deposit.");
+                }
+                near_amount -= storage_staking_price_per_additional_account;
+
+                0
+            }
+        };
+        if near_amount == 0 {
+            env::panic_str("Insufficient near deposit.");
+        }
+
+        let token_amount = self.convert_near_amount_to_token_amount(near_amount);
+        if token_amount == 0 {
+            env::panic_str("Insufficient near deposit.");
+        }
+
+        if self.fund.is_distributed_on_validators_in_current_epoch && self.validating.preffered_validtor.is_some() {
+            match self.validating.preffered_validtor {
+                Some(ref preffered_validator_account_id) => {
+                    match self.validating.validator_registry.get(preffered_validator_account_id) {
+                        Some(validator) => {
+                            match validator.staking_contract_version {
+                                StakingContractVersion::Classic => {
+                                    PromiseOrValue::Promise(
+                                        validator::ext(preffered_validator_account_id.clone())
+                                            .with_attached_deposit(near_amount)
+                                            // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
+                                            .deposit_and_stake()
+                                            .then(
+                                                Self::ext(env::current_account_id())
+                                                    .deposit_1_callback(
+                                                        predecessor_account_id,
+                                                        preffered_validator_account_id.clone(),
+                                                        near_amount,
+                                                        token_amount,
+                                                        env::epoch_height()
+                                                    )
+                                            )
+                                    )
+                                }
+                            }
+                        }
+                        None => {
+                            env::panic_str("Object should exist.");
+                        }
+                    }
+                }
+                None => {
+                    env::panic_str("Object should exist.");
+                }
+            }
+        } else {
+            token_balance += token_amount;
+
+            self.fund.classic_unstaked_balance += near_amount;
+            self.fungible_token.total_supply += token_amount;
+            if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance) {
+                self.fungible_token.accounts_quantity += 1;
+            }
+
+            PromiseOrValue::Value(())
+        }
+    }
+
+    fn internal_deposit_2(&mut self, near_amount: Balance) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
 
@@ -438,7 +522,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                             .deposit_and_stake()
                                             .then(
                                                 Self::ext(env::current_account_id())
-                                                    .deposit_callback(
+                                                    .deposit_2_callback(
                                                         predecessor_account_id,
                                                         preffered_validator_account_id.clone(),
                                                         near_amount,
@@ -1755,7 +1839,52 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 #[near_bindgen]
 impl StakePool {
     #[private]
-    pub fn deposit_callback(
+    pub fn deposit_1_callback(
+        &mut self,
+        predecessor_account_id: AccountId,
+        validator_account_id: AccountId,
+        near_amount: Balance,
+        token_amount: Balance,
+        current_epoch_height: EpochHeight
+    ) {
+        if env::promise_results_count() == 0 {
+            env::panic_str("Contract expected a result on the callback.");
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(_) => {
+                let mut validator = match self.validating.validator_registry.get(&validator_account_id) {
+                    Some(validator_) => validator_,
+                    None => {
+                        env::panic_str("Nonexecutable code. Object must exist.");
+                    }
+                };
+                validator.classic_staked_balance += near_amount;
+                validator.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
+                self.validating.validator_registry.insert(&validator_account_id, &validator);
+
+                self.fund.classic_staked_balance += near_amount;
+            }
+            _ => {
+                self.fund.classic_unstaked_balance += near_amount;
+            }
+        }
+
+        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => token_balance_,
+            None => {
+                self.fungible_token.accounts_quantity += 1;
+
+                0
+            }
+        };
+        token_balance += token_amount;
+        self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+        self.fungible_token.total_supply += token_amount;
+    }
+
+    #[private]
+    pub fn deposit_2_callback(
         &mut self,
         predecessor_account_id: AccountId,
         validator_account_id: AccountId,
