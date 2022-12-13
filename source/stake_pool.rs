@@ -11,7 +11,7 @@ use super::data_transfer_object::base_account_balance::BaseAccountBalance;
 use super::data_transfer_object::callback_result::CallbackResult;
 use super::data_transfer_object::delayed_withdrawal_details::DelayedWithdrawalDetails;
 use super::data_transfer_object::epoch_height_registry::EpochHeightRegistry;
-use super::data_transfer_object::fee_registry::FeeRegistry as FeeRegistryDto;
+use super::data_transfer_object::fee_registry_light::FeeRegistryLight;
 use super::data_transfer_object::full::Full;
 use super::data_transfer_object::fund::Fund as FundDto;
 use super::data_transfer_object::investor_investment::InvestorInvestment as InvestorInvestmentDto;
@@ -242,8 +242,12 @@ impl StakePool {
         self.internal_get_fund()
     }
 
-    pub fn get_fee_registry(&self) -> FeeRegistryDto {
+    pub fn get_fee_registry(&self) -> FeeRegistry {
         self.internal_get_fee_registry()
+    }
+
+    pub fn get_fee_registry_light(&self) -> FeeRegistryLight {
+        self.internal_get_fee_registry_light()
     }
 
     pub fn get_current_epoch_height(&self) -> EpochHeightRegistry {
@@ -1621,7 +1625,14 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn internal_get_fee_registry(&self) -> FeeRegistryDto {
+    fn internal_get_fee_registry(&self) -> FeeRegistry {
+        self.assert_epoch_is_synchronized();
+        self.assert_authorized_management_only_by_manager();
+
+        self.fee_registry.clone()
+    }
+
+    fn internal_get_fee_registry_light(&self) -> FeeRegistryLight {
         self.assert_epoch_is_synchronized();
 
         let reward_fee = match self.fee_registry.reward_fee {
@@ -1634,7 +1645,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             None => None
         };
 
-        FeeRegistryDto {
+        FeeRegistryLight {
             reward_fee,
             instant_withdraw_fee
         }
@@ -1750,7 +1761,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             fund: self.internal_get_fund(),
             account_balance: self.internal_get_account_balance(account_id.clone()),
             delayed_withdrawal_details: self.internal_get_delayed_withdrawal_details(account_id),
-            total_token_supply: self.internal_get_total_token_supply().into()
+            total_token_supply: self.internal_get_total_token_supply().into(),
+            fee_registry_light: self.internal_get_fee_registry_light()
         }
     }
 
