@@ -1827,6 +1827,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             full: self.internal_get_full(),
             account_balance: self.internal_get_account_balance(account_id.clone()),
             delayed_withdrawal_details: self.internal_get_delayed_withdrawal_details(account_id.clone()),
+            investor_investment: self.get_investor_investment(account_id.clone()),
             storage_staking_requested_coverage: self.get_storage_staking_requested_coverage(account_id)
         }
     }
