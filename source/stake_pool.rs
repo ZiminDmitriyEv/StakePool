@@ -12,11 +12,13 @@ use super::data_transfer_object::callback_result::CallbackResult;
 use super::data_transfer_object::delayed_withdrawal_details::DelayedWithdrawalDetails;
 use super::data_transfer_object::epoch_height_registry::EpochHeightRegistry;
 use super::data_transfer_object::fee_registry_light::FeeRegistryLight;
+use super::data_transfer_object::full_for_account::FullForAccount;
 use super::data_transfer_object::full::Full;
 use super::data_transfer_object::fund::Fund as FundDto;
 use super::data_transfer_object::investor_investment::InvestorInvestment as InvestorInvestmentDto;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
+use super::data_transfer_object::storage_staking_requested_coverage::StorageStakingRequestedCoverage;
 use super::data_transfer_object::validator::Validator as ValidatorDto;
 use super::delayed_withdrawal::DelayedWithdrawal;
 use super::fee_registry::FeeRegistry;
@@ -210,6 +212,10 @@ impl StakePool {
         self.internal_get_storage_staking_price()
     }
 
+    pub fn get_storage_staking_requested_coverage(&self, account_id: AccountId) -> StorageStakingRequestedCoverage {
+        self.internal_get_storage_staking_requested_coverage(account_id)
+    }
+
     pub fn get_fund(&self) -> FundDto {
         self.internal_get_fund()
     }
@@ -246,8 +252,12 @@ impl StakePool {
         self.internal_get_requested_to_withdrawal_fund()
     }
 
-    pub fn get_full(&self, account_id: AccountId) -> Full {
-        self.internal_get_full(account_id)
+    pub fn get_full(&self) -> Full {
+        self.internal_get_full()
+    }
+
+    pub fn get_full_for_account(&self, account_id: AccountId) -> FullForAccount {
+        self.internal_get_full_for_account(account_id)
     }
 }
 
@@ -696,7 +706,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.fungible_token.total_supply -= token_amount;
 
-        Promise::new(predecessor_account_id)                // TODO вот тут не лучше ли сделать через коллбек
+        Promise::new(predecessor_account_id)
             .transfer(near_amount)
     }
 
@@ -740,7 +750,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 let near_deposit = env::attached_deposit();
 
                 let storage_staking_price_per_additional_delayed_withdrawal =
-                    Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_account);
+                    Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
                 if near_deposit < storage_staking_price_per_additional_delayed_withdrawal {
                     env::panic_str("Insufficient near deposit.");
                 }
@@ -872,12 +882,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 delayed_withdrawal_
             }
             None => {
-                let storage_staking_price_per_additional_account =
-                    Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_account);
-                if near_refundable_deposit < storage_staking_price_per_additional_account {
+                let storage_staking_price_per_additional_delayed_withdrawal =
+                    Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
+                if near_refundable_deposit < storage_staking_price_per_additional_delayed_withdrawal {
                     env::panic_str("Insufficient near deposit.");
                 }
-                near_refundable_deposit -= storage_staking_price_per_additional_account;
+                near_refundable_deposit -= storage_staking_price_per_additional_delayed_withdrawal;
 
                 DelayedWithdrawal {
                     near_amount: 0,
@@ -949,7 +959,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 self.fund.delayed_withdrawn_fund.balance -= delayed_withdrawal.near_amount;
 
                 let near_amount = delayed_withdrawal.near_amount
-                    + Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_account)
+                    + Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal)
                     + attached_deposit;
 
                 Promise::new(predecessor_account_id)
@@ -1521,12 +1531,86 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     pub fn internal_get_storage_staking_price(&self) -> StorageStakingPrice {
         StorageStakingPrice {
-            per_delayed_withdrawal_fund_account: Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_account).into(),
+            per_delayed_withdrawal_fund_delayed_withdrawal: Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal).into(),
             per_delayed_withdrawal_fund_investment_withdrawal: Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_investment_withdrawal).into(),
             per_fungible_token_account: Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account).into(),
             per_validating_node_validator: Self::calculate_storage_staking_price(self.validating.storage_usage_per_validator).into(),
             per_validating_node_investor: Self::calculate_storage_staking_price(self.validating.storage_usage_per_investor_investment).into(),
             per_validating_node_distribution: Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution).into()
+        }
+    }
+
+    pub fn internal_get_storage_staking_requested_coverage(&self, account_id: AccountId) -> StorageStakingRequestedCoverage {
+        self.assert_epoch_is_synchronized();
+
+        let storage_staking_price_per_delayed_withdrawal_fund_delayed_withdrawal = Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
+
+        let storage_staking_price_per_delayed_withdrawal_fund_investment_withdrawal = Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_investment_withdrawal);
+
+        let storage_staking_price_per_fungible_token_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+
+        let storage_staking_price_per_validating_node_distribution = Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
+
+        let per_method_deposit = if !self.fungible_token.account_registry.contains_key(&account_id) {
+            storage_staking_price_per_fungible_token_account
+        } else {
+            0
+        };
+
+        let per_method_delayed_withdraw = if !self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.contains_key(&account_id) {
+            storage_staking_price_per_delayed_withdrawal_fund_delayed_withdrawal
+        } else {
+            0
+        };
+
+        let (per_method_deposit_on_validator, per_method_delayed_withdraw_from_validator): (Option<(U128, Vec<(AccountId, U128)>)>, Option<(U128, Vec<(AccountId, U128)>)>) =
+            match self.validating.investor_investment_registry.get(&account_id) {
+            Some(investor_investment) => {
+                let requested_storage_staking_price_per_fungible_token_account = if !self.fungible_token.account_registry.contains_key(&account_id) {
+                    storage_staking_price_per_fungible_token_account
+                } else {
+                    0
+                };
+
+                let requested_storage_staking_price_per_delayed_withdrawal_fund_delayed_withdrawal = if !self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.contains_key(&account_id) {
+                    storage_staking_price_per_delayed_withdrawal_fund_delayed_withdrawal
+                } else {
+                    0
+                };
+
+                let mut requested_storage_staking_price_per_distribution_registry: Vec<(AccountId, U128)> = vec![];
+
+                let mut requested_storage_staking_price_per_delayed_withdrawal_fund_investment_withdrawal_registry: Vec<(AccountId, U128)> = vec![];
+
+                for validator_account_id in self.validating.validator_registry.keys() {
+                    if !investor_investment.distribution_registry.contains_key(&validator_account_id) {
+                        requested_storage_staking_price_per_distribution_registry.push((validator_account_id, storage_staking_price_per_validating_node_distribution.into()));
+                    } else {
+                        requested_storage_staking_price_per_distribution_registry.push((validator_account_id.clone(), 0.into()));
+
+                        if !self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.contains_key(&validator_account_id) {
+                            requested_storage_staking_price_per_delayed_withdrawal_fund_investment_withdrawal_registry.push((validator_account_id, storage_staking_price_per_delayed_withdrawal_fund_investment_withdrawal.into()));
+                        } else {
+                            requested_storage_staking_price_per_delayed_withdrawal_fund_investment_withdrawal_registry.push((validator_account_id, 0.into()));
+                        }
+                    }
+                }
+
+                (
+                    Some((requested_storage_staking_price_per_fungible_token_account.into(), requested_storage_staking_price_per_distribution_registry)),
+                    Some((requested_storage_staking_price_per_delayed_withdrawal_fund_delayed_withdrawal.into(), requested_storage_staking_price_per_delayed_withdrawal_fund_investment_withdrawal_registry))
+                )
+            }
+            None => {
+                (None, None)
+            }
+        };
+
+        StorageStakingRequestedCoverage {
+            per_method_deposit: per_method_deposit.into(),
+            per_method_deposit_on_validator,
+            per_method_delayed_withdraw: per_method_delayed_withdraw.into(),
+            per_method_delayed_withdraw_from_validator
         }
     }
 
@@ -1725,16 +1809,25 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    pub fn internal_get_full(&self, account_id: AccountId) -> Full {
+    pub fn internal_get_full(&self) -> Full {
         self.assert_epoch_is_synchronized();
 
         Full {
             storage_staking_price: self.internal_get_storage_staking_price(),
             fund: self.internal_get_fund(),
-            account_balance: self.internal_get_account_balance(account_id.clone()),
-            delayed_withdrawal_details: self.internal_get_delayed_withdrawal_details(account_id),
             total_token_supply: self.internal_get_total_token_supply().into(),
             fee_registry_light: self.internal_get_fee_registry_light()
+        }
+    }
+
+    pub fn internal_get_full_for_account(&self, account_id: AccountId) -> FullForAccount {
+        self.assert_epoch_is_synchronized();
+
+        FullForAccount {
+            full: self.internal_get_full(),
+            account_balance: self.internal_get_account_balance(account_id.clone()),
+            delayed_withdrawal_details: self.internal_get_delayed_withdrawal_details(account_id.clone()),
+            storage_staking_requested_coverage: self.get_storage_staking_requested_coverage(account_id)
         }
     }
 
@@ -2305,3 +2398,16 @@ impl StakePool {
 // Документация
 
 // 1. Метод, отдающий необходимое число для стораджстейкинга для конкретного юзера для конкретного метода.
+
+
+
+
+
+
+
+
+// Что это за записль. Спросить в Дискорде.
+//
+// impl<T, U> const Into<U> for T
+// where
+//     U: ~const From<T>,

@@ -22,7 +22,7 @@ pub struct DelayedWithdrawnFund {
     /// Near balance available for withdrawal after passing the delayed withdrawal process.
     pub balance: Balance,          // TODO посмотреть в свойствах и в методах, стоит ли именить near_balance на balance и подобное, то есть, near_ уже может быть в контексте.
     /// In bytes.
-    pub storage_usage_per_account: StorageUsage,
+    pub storage_usage_per_delayed_withdrawal: StorageUsage,
     /// In bytes.
     pub storage_usage_per_investment_withdrawal: StorageUsage
 }
@@ -35,12 +35,12 @@ impl DelayedWithdrawnFund {
             needed_to_request_classic_near_amount: 0,
             needed_to_request_investment_near_amount: 0,
             balance: 0,
-            storage_usage_per_account: Self::calculate_storage_usage_per_additional_account(),
+            storage_usage_per_delayed_withdrawal: Self::calculate_storage_usage_per_additional_delayed_withdrawal(),
             storage_usage_per_investment_withdrawal: Self::calculate_storage_usage_per_additional_investment_withdrawal()
         }
     }
 
-    fn calculate_storage_usage_per_additional_account() -> StorageUsage {
+    fn calculate_storage_usage_per_additional_delayed_withdrawal() -> StorageUsage {
         let mut delayed_withdrawal_registry = Self::initialize_delayed_withdrawal_registry();
 
         let initial_storage_usage = env::storage_usage();
