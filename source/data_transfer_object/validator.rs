@@ -5,8 +5,8 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Validator {
-    pub unstaked_balance: U128,
     pub account_id: AccountId,
+    pub unstaked_balance: U128,
     pub classic_staked_balance: U128,
     pub investment_staked_balance: U128,
     pub is_only_for_investment: bool,

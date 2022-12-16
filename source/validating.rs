@@ -13,7 +13,7 @@ pub struct Validating {
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
     pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,                 // TODO переместить в отдельный модуль?.
     pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
-    pub preffered_validtor: Option<AccountId>,
+    pub preffered_validator: Option<AccountId>,
     pub quantity_of_validators_updated_in_current_epoch: u64,
     /// In bytes.
     pub storage_usage_per_validator: StorageUsage,
@@ -29,7 +29,7 @@ impl Validating {
             validator_registry: Self::initialize_validator_registry(),
             investor_investment_registry: Self::initialize_investor_investment_registry(),
             validators_quantity: 0,
-            preffered_validtor: None,
+            preffered_validator: None,
             quantity_of_validators_updated_in_current_epoch: 0,
             storage_usage_per_validator: Self::calculate_storage_usage_per_additional_validator(),
             storage_usage_per_investor_investment: Self::calculate_storage_usage_per_additional_investor_investment(),
