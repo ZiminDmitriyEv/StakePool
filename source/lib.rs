@@ -1,3 +1,4 @@
+use near_sdk::ONE_NEAR;
 use near_sdk::Balance;
 
 pub mod stake_pool;
@@ -23,7 +24,7 @@ pub(crate) mod validator;
 pub const EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL: u64 = 8;
 pub const MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;
 pub const MAXIMUM_NUMBER_OF_TGAS: u64 = 300;
-pub const MINIMUM_ATTACHED_DEPOSIT: Balance = 1;
+pub const MINIMUN_DEPOSIT_AMOUNT: Balance = ONE_NEAR;
 
 
 // const GAS_FOR_FT_TRANSFER_CALL: Gas = Gas(35 * TGAS + GAS_FOR_RESOLVE_TRANSFER.0);  TODO ВОт так сделатьs

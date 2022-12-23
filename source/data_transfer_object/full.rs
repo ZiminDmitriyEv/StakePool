@@ -10,5 +10,6 @@ pub struct Full {
     pub storage_staking_price: StorageStakingPrice,
     pub fund: Fund,
     pub total_token_supply: U128,
-    pub fee_registry_light: FeeRegistryLight
+    pub fee_registry_light: FeeRegistryLight,
+    pub minimum_deposit_amount: U128
 }

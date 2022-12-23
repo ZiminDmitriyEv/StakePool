@@ -28,7 +28,7 @@ use super::fungible_token::FungibleToken;
 use super::investment_withdrawal::InvestmentWithdrawal;
 use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
-use super::MINIMUM_ATTACHED_DEPOSIT;
+use super::MINIMUN_DEPOSIT_AMOUNT;
 use super::shared_fee::SharedFee;
 use super::stake_decreasing_kind::StakeDecreasingType;
 use super::staking_contract_version::StakingContractVersion;
@@ -92,6 +92,7 @@ impl StakePool {
     }
 
     /// Instant unstake process.
+    #[payable]
     pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {     // TODO добавиьь 1 ектонеар аттачед депозит?
         self.internal_instant_withdraw(token_amount.into())
     }
@@ -200,6 +201,10 @@ impl StakePool {
 
     pub fn get_total_token_supply(&self) -> U128 {
         self.internal_get_total_token_supply().into()
+    }
+
+    pub fn get_minimum_deposit_amount(&self) -> U128 {
+        self.internal_get_minimum_deposit_amount().into()
     }
 
     pub fn get_storage_staking_price(&self) -> StorageStakingPrice {
@@ -378,6 +383,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_deposit(&mut self, near_amount: Balance) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
+        Self::assert_minimum_deposit();
         self.assert_epoch_is_synchronized();
 
         if near_amount == 0 {
@@ -471,6 +477,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_deposit_on_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> Promise {
         Self::assert_gas_is_enough();
+        Self::assert_minimum_deposit();
         self.assert_epoch_is_synchronized();
 
         if near_amount == 0 {
@@ -542,6 +549,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_instant_withdraw(&mut self, mut token_amount: Balance) -> Promise {
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
 
         if token_amount == 0 {
@@ -604,6 +612,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         let mut near_amount = self.convert_token_amount_to_near_amount(token_amount);      // TODO  TODO  TODO  TODO  TODO  Может, конвертацию везде нужно считать на коллбеке в контексте лостАпдейта? братить внимание, что условия на проверку на ноль после конвертации уже ставиь не нужно, если решен вопрос с конвертацией.
+
         if near_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
@@ -627,12 +636,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.fungible_token.total_supply -= token_amount;
 
+        near_amount += env::attached_deposit();
+
         Promise::new(predecessor_account_id)
             .transfer(near_amount)
     }
 
     fn internal_delayed_withdraw(&mut self, token_amount: Balance) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
 
         if token_amount == 0 {
@@ -721,6 +733,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
 
         if near_amount == 0 {
@@ -863,34 +876,29 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_take_delayed_withdrawal(&mut self) -> Promise {
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
-
-        let attached_deposit = env::attached_deposit();
-        if attached_deposit != MINIMUM_ATTACHED_DEPOSIT {
-            env::panic_str("Wrong attached deposit.");
-        }
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.remove(&predecessor_account_id) {
-            Some(delayed_withdrawal) => {
-                if !delayed_withdrawal.can_take_delayed_withdrawal(self.current_epoch_height) {
-                    env::panic_str("Wrong epoch for withdrawal.");
-                }
-
-                self.fund.delayed_withdrawn_fund.balance -= delayed_withdrawal.near_amount;
-
-                let near_amount = delayed_withdrawal.near_amount
-                    + Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal)
-                    + attached_deposit;
-
-                Promise::new(predecessor_account_id)
-                    .transfer(near_amount)
-            }
+        let delayed_withdrawal = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.remove(&predecessor_account_id) {
+            Some(delayed_withdrawal_) => delayed_withdrawal_,
             None => {
                 env::panic_str("Delayed withdrawal account is not registered.");
             }
+        };
+        if !delayed_withdrawal.can_take_delayed_withdrawal(self.current_epoch_height) {
+            env::panic_str("Wrong epoch for withdrawal.");
         }
+
+        self.fund.delayed_withdrawn_fund.balance -= delayed_withdrawal.near_amount;
+
+        let near_amount = delayed_withdrawal.near_amount
+            + Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal)
+            + env::attached_deposit();
+
+        Promise::new(predecessor_account_id)
+            .transfer(near_amount)
     }
 
     fn internal_increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: Balance) -> Promise {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
@@ -941,7 +949,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_gas_is_enough();
         self.assert_epoch_is_desynchronized();
         self.assert_authorized_management_only_by_manager();
-        if !Self::epoch_is_right(env::epoch_height()) {
+        if !Self::is_right_epoch(env::epoch_height()) {
             env::panic_str("Epoch is not intended for a requested decrease validator stake request.");
         }
 
@@ -1009,7 +1017,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let current_epoch_height = env::epoch_height();
 
-        if !Self::epoch_is_right(current_epoch_height) {
+        if !Self::is_right_epoch(current_epoch_height) {
             env::panic_str("Epoch is not intended for a take unstaked balance.");
         }
 
@@ -1084,7 +1092,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 env::panic_str("Some validators are not updated.");
             }
 
-            if Self::epoch_is_right(current_epoch_height)
+            if Self::is_right_epoch(current_epoch_height)
                 && (self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount > 0
                     || self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount > 0) {
                     env::panic_str("Some funds are not unstaked from validators.");
@@ -1149,6 +1157,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         is_preferred: bool
     ) -> PromiseOrValue<()> {                                                     // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
@@ -1286,6 +1295,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_add_investor(&mut self, investor_account_id: AccountId) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
@@ -1406,15 +1416,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
     fn internal_ft_transfer(&mut self, receiver_account_id: AccountId, token_amount: Balance) -> Promise {     // TODO стоит ли удалять токен-аккаунт с нулевым балансом. Сейчас я его удаляю. нет механизма регистрации. Сейчас регистрируется тоько при депозите
         Self::assert_gas_is_enough();
+        Self::assert_natural_deposit();
 
         if token_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
 
-        let mut near_amount = env::attached_deposit();
-        if near_amount != MINIMUM_ATTACHED_DEPOSIT {
-            env::panic_str("Wrong attached deposit.");
-        }
+        let mut refundable_near_amount = env::attached_deposit();
 
         let predecessor_account_id = env::predecessor_account_id();
         let mut predecessor_account_token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
@@ -1453,12 +1461,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+            refundable_near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
         }
         self.fungible_token.account_registry.insert(&receiver_account_id, &receiver_account_token_balance);
 
         Promise::new(predecessor_account_id)
-            .transfer(near_amount)
+            .transfer(refundable_near_amount)
     }
 
     pub fn internal_get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<DelayedWithdrawalDetails> {
@@ -1480,6 +1488,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         self.assert_epoch_is_synchronized();
 
         self.fungible_token.total_supply
+    }
+
+    fn internal_get_minimum_deposit_amount(&self) -> Balance {
+        MINIMUN_DEPOSIT_AMOUNT
     }
 
     pub fn internal_get_storage_staking_price(&self) -> StorageStakingPrice {
@@ -1804,7 +1816,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             storage_staking_price: self.internal_get_storage_staking_price(),
             fund: self.internal_get_fund(),
             total_token_supply: self.internal_get_total_token_supply().into(),
-            fee_registry_light: self.internal_get_fee_registry_light()
+            fee_registry_light: self.internal_get_fee_registry_light(),
+            minimum_deposit_amount: self.get_minimum_deposit_amount()
         }
     }
 
@@ -1872,6 +1885,18 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
+    fn assert_natural_deposit() {
+        if env::attached_deposit() == 0 {
+            env::panic_str("Not natural attached deposit.");
+        }
+    }
+
+    fn assert_minimum_deposit() {
+        if env::attached_deposit() < MINIMUN_DEPOSIT_AMOUNT {
+            env::panic_str("Attached deposit less then minimum required deposit.");
+        }
+    }
+
     fn assert_epoch_is_synchronized(&self) {
         if self.current_epoch_height != env::epoch_height() {
             env::panic_str("Epoch should be in synchronized state.");
@@ -1890,7 +1915,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-    fn epoch_is_right(epoch_height: EpochHeight) -> bool {
+    fn is_right_epoch(epoch_height: EpochHeight) -> bool {
         (epoch_height % 4) == 0                                                      // TODO  цифру 4 - в константу положить.
     }
 
@@ -2191,7 +2216,7 @@ impl StakePool {
                         env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
-
+// ОТЛОВИТЬ БАГ
                 let staking_rewards_near_amount = new_staked_balance - validator.get_staked_balance();
 
                 validator.last_update_epoch_height = current_epoch_height;
@@ -2287,6 +2312,7 @@ impl StakePool {
 
 // TODO проработать логи, то есть, втсавлять в них конкретные значения
 
+// TODO подумать, как поступать с аккаунтами при "снятии в ноль". Сейчас аккаунт удаляется и средства за сс отдаются, но можно и просто оставлять аккаунт с 0 значенями
 
 
 
@@ -2300,6 +2326,10 @@ impl StakePool {
 // Документация
 
 
+
+// СОобщение Михаила. Баг дл первого инвестирования без предварительного депозита.
+
+// Закинуть Михаилу_РАСТ_РАЗРАБОТЧИКу контракт.
 
 
 
