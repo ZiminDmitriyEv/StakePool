@@ -93,7 +93,7 @@ impl StakePool {
 
     /// Instant unstake process.
     #[payable]
-    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {     // TODO добавиьь 1 ектонеар аттачед депозит?
+    pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
         self.internal_instant_withdraw(token_amount.into())
     }
 
