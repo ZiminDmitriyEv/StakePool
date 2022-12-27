@@ -2203,7 +2203,7 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(data) => {
-                let new_staked_balance: u128 = match near_sdk::serde_json::from_slice::<U128>(data.as_slice()) {  // TODO Проверить, правилен ли тот факт, что нужно обработать Джсон в ДжсонТипРаст
+                let new_staked_balance: u128 = match near_sdk::serde_json::from_slice::<U128>(data.as_slice()) {
                     Ok(new_staked_balance_) => new_staked_balance_.into(),
                     Err(_) => {
                         env::panic_str("Nonexecutable code. It should be valid JSON object.");
@@ -2324,18 +2324,3 @@ impl StakePool {
 // Проверить, что Методы для кросскола, правильно интегрированы в логику, то есть, где get_account_total_balance/get_account_staked_balance. Проверить все методы.!!!!!!!1
 
 // Документация
-
-
-
-// СОобщение Михаила. Баг дл первого инвестирования без предварительного депозита.
-
-// Закинуть Михаилу_РАСТ_РАЗРАБОТЧИКу контракт.
-
-
-
-
-// Что это за записль. Спросить в Дискорде.
-//
-// impl<T, U> const Into<U> for T
-// where
-//     U: ~const From<T>,
