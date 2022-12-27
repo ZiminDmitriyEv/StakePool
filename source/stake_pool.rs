@@ -2216,7 +2216,7 @@ impl StakePool {
                         env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
-// ОТЛОВИТЬ БАГ
+
                 let staking_rewards_near_amount = new_staked_balance - validator.get_staked_balance();
 
                 validator.last_update_epoch_height = current_epoch_height;
