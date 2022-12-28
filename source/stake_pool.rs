@@ -386,8 +386,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_minimum_deposit();
         self.assert_epoch_is_synchronized();
 
-        if near_amount == 0 {
-            env::panic_str("Insufficient near amount.");
+        if near_amount < MINIMUN_DEPOSIT_AMOUNT {
+            env::panic_str("Near amount less then minimum required deposit.");
         }
 
         let predecessor_account_id = env::predecessor_account_id();
@@ -480,8 +480,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_minimum_deposit();
         self.assert_epoch_is_synchronized();
 
-        if near_amount == 0 {
-            env::panic_str("Insufficient near amount.");
+        if near_amount < MINIMUN_DEPOSIT_AMOUNT {
+            env::panic_str("Near amount less then minimum required deposit.");
         }
 
         let validator = match self.validating.validator_registry.get(&validator_account_id) {
@@ -2324,3 +2324,7 @@ impl StakePool {
 // Проверить, что Методы для кросскола, правильно интегрированы в логику, то есть, где get_account_total_balance/get_account_staked_balance. Проверить все методы.!!!!!!!1
 
 // Документация
+
+// НУжно ли добавить метод рестейк внутрь пула для каждого валидатора?
+
+сделать логи, и запустиь на крон. Затем сделать курс через добавочный фонд
