@@ -24,6 +24,7 @@ pub(crate) mod validator;
 pub const EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL: u64 = 8;
 pub const MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;
 pub const MAXIMUM_NUMBER_OF_TGAS: u64 = 300;
+/// The minimum near amount that must be attached to a transaction.
 pub const MINIMUN_DEPOSIT_AMOUNT: Balance = ONE_NEAR;
 
 

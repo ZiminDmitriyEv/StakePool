@@ -386,24 +386,26 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_minimum_deposit();
         self.assert_epoch_is_synchronized();
 
-        if near_amount < MINIMUN_DEPOSIT_AMOUNT {
-            env::panic_str("Near amount less then minimum required deposit.");
-        }
-
         let predecessor_account_id = env::predecessor_account_id();
 
         let attached_deposit = env::attached_deposit();
 
-        let mut storage_staking_price_per_additional_account: Balance = 0;
-
-        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance_) => token_balance_,
+        let (storage_staking_price_per_additional_account, mut token_balance) = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(token_balance_) => (0, token_balance_),
             None => {
-                storage_staking_price_per_additional_account += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
-
-                0
+                (Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account), 0)
             }
         };
+
+        let minimum_near_amount = if MINIMUN_DEPOSIT_AMOUNT > storage_staking_price_per_additional_account {
+            MINIMUN_DEPOSIT_AMOUNT - storage_staking_price_per_additional_account
+        } else {
+            env::panic_str("Logic error.");
+        };
+        if near_amount < minimum_near_amount {
+            env::panic_str("Near amount less then minimum required near amount.");
+        }
+
         if attached_deposit < storage_staking_price_per_additional_account {
             env::panic_str("Insufficient near deposit.");
         }
@@ -480,10 +482,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_minimum_deposit();
         self.assert_epoch_is_synchronized();
 
-        if near_amount < MINIMUN_DEPOSIT_AMOUNT {
-            env::panic_str("Near amount less then minimum required deposit.");
-        }
-
         let validator = match self.validating.validator_registry.get(&validator_account_id) {
             Some(validator_) => validator_,
             None => {
@@ -495,14 +493,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let attached_deposit = env::attached_deposit();
 
-        let mut storage_staking_price_per_additional_accounts: Balance = 0;
-
         let investor_investment = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
             Some(investor_investment_) => investor_investment_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
             }
         };
+
+        let mut storage_staking_price_per_additional_accounts: Balance = 0;
+
         if let None = investor_investment.distribution_registry.get(&validator_account_id) {
             storage_staking_price_per_additional_accounts += Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
         }
@@ -510,6 +509,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         if let None = self.fungible_token.account_registry.get(&predecessor_account_id) {
             storage_staking_price_per_additional_accounts += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
         };
+
+        let minimum_near_amount = if MINIMUN_DEPOSIT_AMOUNT > storage_staking_price_per_additional_accounts {
+            MINIMUN_DEPOSIT_AMOUNT - storage_staking_price_per_additional_accounts
+        } else {
+            env::panic_str("Logic error.");
+        };
+        if near_amount < minimum_near_amount {
+            env::panic_str("Near amount less then minimum required near amount.");
+        }
 
         if attached_deposit <= storage_staking_price_per_additional_accounts {
             env::panic_str("Insufficient near deposit.");
@@ -683,8 +691,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 (attached_deposit, delayed_withdrawal_)
             }
             None => {
-                let storage_staking_price_per_additional_delayed_withdrawal =
-                    Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
+                let storage_staking_price_per_additional_delayed_withdrawal = Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
                 if attached_deposit < storage_staking_price_per_additional_delayed_withdrawal {
                     env::panic_str("Insufficient near deposit.");
                 }
@@ -713,7 +720,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
         } else {
-           self.fungible_token.account_registry.remove(&predecessor_account_id);
+            self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
             near_refundable_deposit += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
@@ -2327,4 +2334,4 @@ impl StakePool {
 
 // НУжно ли добавить метод рестейк внутрь пула для каждого валидатора?
 
-сделать логи, и запустиь на крон. Затем сделать курс через добавочный фонд
+// сделать логи, и запустиь на крон. Затем сделать курс через добавочный фонд
