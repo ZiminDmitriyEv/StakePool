@@ -469,9 +469,46 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
 
             if refundable_near_amount > 0 {
-                Promise::new(predecessor_account_id)
+                Promise::new(predecessor_account_id.clone())
                     .transfer(refundable_near_amount);
             }
+
+            let current_account_id = env::current_account_id();
+
+            env::log_str(
+                format!(
+                    "
+                    {} yoctoNear - attached deposit,
+                    {} yoctoNear - exchangeable amount,
+                    {} yoctoNear - storage staking price,
+                    {} yoctoNear - refundable amount,
+                    {} yoctoNear - old @{} balance
+                    {} yoctoStNear - old @{} total supply,
+                    {} yoctoStNear - old @{} balance,
+                    {} yoctoStNear - received,
+                    {} yoctoStNear - new @{} balance,
+                    {} yoctoNear - new @{} balance,
+                    {} yoctoStNear - new @{} total supply
+                    ",
+                    attached_deposit,
+                    near_amount,
+                    storage_staking_price_per_additional_account,
+                    refundable_near_amount,
+                    self.fund.get_common_balance() - near_amount,
+                    &current_account_id,
+                    self.fungible_token.total_supply - token_amount,
+                    &current_account_id,
+                    token_balance - token_amount,
+                    &predecessor_account_id,
+                    token_amount,
+                    token_balance,
+                    &predecessor_account_id,
+                    self.fund.get_common_balance(),
+                    &current_account_id,
+                    self.fungible_token.total_supply,
+                    &current_account_id,
+                ).as_str()
+            );
 
             PromiseOrValue::Value(())
         }
