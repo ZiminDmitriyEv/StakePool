@@ -590,7 +590,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                                 near_amount,
                                 attached_deposit,
                                 refundable_near_amount,
-                                token_amount
+                                token_amount,
+                                storage_staking_price_per_additional_accounts
                             )
                     )
             }
@@ -2082,7 +2083,8 @@ impl StakePool {
         near_amount: Balance,
         attached_deposit: Balance,
         refundable_near_amount: Balance,
-        token_amount: Balance
+        token_amount: Balance,
+        storage_staking_price_per_additional_accounts: Balance
     ) -> bool {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
@@ -2133,9 +2135,50 @@ impl StakePool {
                 self.fund.investment_staked_balance += near_amount;
 
                 if refundable_near_amount > 0 {
-                    Promise::new(predecessor_account_id)
+                    Promise::new(predecessor_account_id.clone())
                         .transfer(refundable_near_amount);
                 }
+
+                let current_account_id = env::current_account_id();
+                env::log_str(
+                    format!(
+                        "
+                        Deposited to @{} via @{} in {} epoch.
+                        Attached deposit is {} yoctoNear.
+                        Exchangeable deposit is {} yoctoNear.
+                        Storage staking price is {} yoctoNear.
+                        Refundable deposit is {} yoctoNear.
+                        Old @{} balance is {} yoctoStNear.
+                        Old @{} balance is {} yoctoNear.
+                        Old @{} balance is {} yoctoStNear.
+                        @{} received {} yoctoStNear.
+                        New @{} balance is {} yoctoStNear.
+                        New @{} balance is {} yoctoNear.
+                        New @{} total supply is {} yoctoStNear.
+                        ",
+                        &validator_account_id,
+                        &current_account_id,
+                        env::epoch_height(),
+                        attached_deposit,
+                        near_amount,
+                        storage_staking_price_per_additional_accounts,
+                        refundable_near_amount,
+                        &current_account_id,
+                        self.fund.get_common_balance() - near_amount,
+                        &current_account_id,
+                        self.fungible_token.total_supply - token_amount,
+                        &predecessor_account_id,
+                        token_balance - token_amount,
+                        &predecessor_account_id,
+                        token_amount,
+                        &predecessor_account_id,
+                        token_balance,
+                        &current_account_id,
+                        self.fund.get_common_balance(),
+                        &current_account_id,
+                        self.fungible_token.total_supply
+                    ).as_str()
+                );
 
                 true
             }
