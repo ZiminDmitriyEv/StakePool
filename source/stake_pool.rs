@@ -479,7 +479,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::log_str(
                 format!(
                     "
-                    Current epoch id {}.
+                    Deposited to @{} in {} epoch.
                     Attached deposit is {} yoctoNear.
                     Exchangeable deposit is {} yoctoNear.
                     Storage staking price is {} yoctoNear.
@@ -492,6 +492,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     New @{} balance is {} yoctoNear.
                     New @{} total supply is {} yoctoStNear.
                     ",
+                    &current_account_id,
                     self.current_epoch_height,
                     attached_deposit,
                     near_amount,
@@ -2035,7 +2036,7 @@ impl StakePool {
         env::log_str(
             format!(
                 "
-                Current epoch id {}.
+                Deposited to @{} via @{} in {} epoch.
                 Attached deposit is {} yoctoNear.
                 Exchangeable deposit is {} yoctoNear.
                 Storage staking price is {} yoctoNear.
@@ -2048,6 +2049,8 @@ impl StakePool {
                 New @{} balance is {} yoctoNear.
                 New @{} total supply is {} yoctoStNear.
                 ",
+                &validator_account_id,
+                &current_account_id,
                 env::epoch_height(),
                 attached_deposit,
                 near_amount,
