@@ -489,7 +489,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     {} yoctoNear - old @{} balance
                     {} yoctoStNear - old @{} total supply,
                     {} yoctoStNear - old @{} balance,
-                    {} yoctoStNear - received,
+                    {} yoctoStNear - received by @{},
                     {} yoctoStNear - new @{} balance,
                     {} yoctoNear - new @{} balance,
                     {} yoctoStNear - new @{} total supply
@@ -506,6 +506,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     token_balance - token_amount,
                     &predecessor_account_id,
                     token_amount,
+                    &predecessor_account_id,
                     token_balance,
                     &predecessor_account_id,
                     self.fund.get_common_balance(),
@@ -2038,7 +2039,7 @@ impl StakePool {
         env::log_str(
             format!(
                 "
-                {} - current epoch,
+                {} - current epoch.
                 {} yoctoNear - attached deposit,
                 {} yoctoNear - exchangeable amount,
                 {} yoctoNear - storage staking price,
@@ -2046,7 +2047,7 @@ impl StakePool {
                 {} yoctoNear - old @{} balance
                 {} yoctoStNear - old @{} total supply,
                 {} yoctoStNear - old @{} balance,
-                {} yoctoStNear - received,
+                {} yoctoStNear - received by @{},
                 {} yoctoStNear - new @{} balance,
                 {} yoctoNear - new @{} balance,
                 {} yoctoStNear - new @{} total supply
@@ -2063,6 +2064,7 @@ impl StakePool {
                 token_balance - token_amount,
                 &predecessor_account_id,
                 token_amount,
+                &predecessor_account_id,
                 token_balance,
                 &predecessor_account_id,
                 self.fund.get_common_balance(),
