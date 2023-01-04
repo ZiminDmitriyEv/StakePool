@@ -697,7 +697,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
-        let storage_staking_price_per_additional_account_log = if token_balance > 0
+        let released_storage_staking_price_per_additional_account_log = if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
@@ -707,11 +707,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            let storage_staking_price_per_additional_account_ = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+            let storage_staking_price_per_additional_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
 
-            near_amount += storage_staking_price_per_additional_account_;
+            near_amount += storage_staking_price_per_additional_account;
 
-            storage_staking_price_per_additional_account_
+            storage_staking_price_per_additional_account
         };
 
         self.fungible_token.total_supply -= token_amount;
@@ -742,12 +742,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 attached_deposit,
                 token_amount_log,
                 instant_withdraw_fee_self_log,
-                storage_staking_price_per_additional_account_log,
+                released_storage_staking_price_per_additional_account_log,
                 near_amount,
                 &current_account_id_log,
                 self.fungible_token.total_supply + token_amount,
                 &current_account_id_log,
-                self.fund.get_common_balance() + near_amount - storage_staking_price_per_additional_account_log - attached_deposit,
+                self.fund.get_common_balance() + near_amount - released_storage_staking_price_per_additional_account_log - attached_deposit,
                 &predecessor_account_id,
                 token_balance_log,
                 &predecessor_account_id,
@@ -797,11 +797,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let attached_deposit = env::attached_deposit();
 
-        let (mut near_refundable_deposit, mut delayed_withdrawal) = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
-            Some(mut delayed_withdrawal_) => {
-                delayed_withdrawal_.started_epoch_height = env::epoch_height();
-
-                (attached_deposit, delayed_withdrawal_)
+        let (
+            mut refundable_near_amount,
+            mut delayed_withdrawal,
+            reserved_storage_staking_price_per_additional_delayed_withdrawal_log
+        ) = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
+            Some(delayed_withdrawal_) => {
+                (attached_deposit, delayed_withdrawal_, 0)
             }
             None => {
                 let storage_staking_price_per_additional_delayed_withdrawal = Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
@@ -814,11 +816,18 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     DelayedWithdrawal {
                         near_amount: 0,
                         started_epoch_height: env::epoch_height()
-                    }
+                    },
+                    storage_staking_price_per_additional_delayed_withdrawal
                 )
             }
         };
+
+        let delayed_withdrawal_near_amount_log = delayed_withdrawal.near_amount;
+
+        let epoch_quantity_to_take_delayed_withdrawal_log = delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height);
+
         delayed_withdrawal.near_amount += near_amount;
+        delayed_withdrawal.started_epoch_height = env::epoch_height();
         self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
@@ -828,23 +837,78 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 env::panic_str("Token amount exceeded the available to delayed withdraw token amount.");
             }
         }
-        if token_balance > 0
+        let released_storage_staking_price_per_additional_account_log = if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+
+            0
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            near_refundable_deposit += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
-        }
+            let storage_staking_price_per_additional_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+
+            refundable_near_amount += storage_staking_price_per_additional_account;
+
+            storage_staking_price_per_additional_account
+        };
 
         self.fungible_token.total_supply -= token_amount;
 
-        if near_refundable_deposit > 0 {
+        let current_account_id_log = env::current_account_id();
+        env::log_str(
+            format!(
+                "
+                Delayed withdrawing from @{} in {} epoch.
+                Attached deposit is {} yoctoNear.
+                Exchangeable deposit is {} yoctoStNear.
+                Refundable deposit is {} yoctoNear.
+                Reserved storage staking price is {} yoctoNear.
+                Released storage staking price is {} yoctoNear.
+                Old expected for receiving amount is {} yoctoNear.
+                Old epoch quantity to take delayed withdrawal is {}.
+                Additional expected for receiving amount is {} yoctoNear.
+                New expected for receiving amount is {} yoctoNear.
+                New epoch quantity to take delayed withdrawal is {}.
+                Old @{} total supply is {} yoctoStNear.
+                Old @{} balance is {} yoctoNear.
+                Old @{} balance is {} yoctoStNear.
+                New @{} balance is {} yoctoStNear.
+                New @{} balance is {} yoctoNear.
+                New @{} total supply is {} yoctoStNear.
+                ",
+                &current_account_id_log,
+                self.current_epoch_height,
+                attached_deposit,
+                token_amount,
+                refundable_near_amount,
+                reserved_storage_staking_price_per_additional_delayed_withdrawal_log,
+                released_storage_staking_price_per_additional_account_log,
+                delayed_withdrawal_near_amount_log,
+                epoch_quantity_to_take_delayed_withdrawal_log,
+                near_amount,
+                delayed_withdrawal.near_amount,
+                delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+                &current_account_id_log,
+                self.fungible_token.total_supply + token_amount,
+                &current_account_id_log,
+                self.fund.get_common_balance() + near_amount,
+                &predecessor_account_id,
+                token_balance + token_amount,
+                &predecessor_account_id,
+                token_balance,
+                &current_account_id_log,
+                self.fund.get_common_balance(),
+                &current_account_id_log,
+                self.fungible_token.total_supply
+            ).as_str()
+        );
+
+        if refundable_near_amount > 0 {
             return PromiseOrValue::Promise(
                 Promise::new(predecessor_account_id)
-                    .transfer(near_refundable_deposit)
+                    .transfer(refundable_near_amount)
             );
         }
 
@@ -891,7 +955,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         let attached_deposit = env::attached_deposit();
 
-        let (mut near_refundable_deposit, mut investment_withdrawal) =
+        let (mut refundable_near_amount, mut investment_withdrawal) =
             match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
             Some(investment_withdrawal_) => (attached_deposit, investment_withdrawal_),
             None => {
@@ -939,10 +1003,10 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             None => {
                 let storage_staking_price_per_additional_delayed_withdrawal =
                     Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
-                if near_refundable_deposit < storage_staking_price_per_additional_delayed_withdrawal {
+                if refundable_near_amount < storage_staking_price_per_additional_delayed_withdrawal {
                     env::panic_str("Insufficient near deposit.");
                 }
-                near_refundable_deposit -= storage_staking_price_per_additional_delayed_withdrawal;
+                refundable_near_amount -= storage_staking_price_per_additional_delayed_withdrawal;
 
                 DelayedWithdrawal {
                     near_amount: 0,
@@ -965,7 +1029,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             investor_investment.distribution_registry.remove(&validator_account_id);
             investor_investment.distributions_quantity -= 1;
 
-            near_refundable_deposit += Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
+            refundable_near_amount += Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
         }
         investor_investment.staked_balance -= near_amount;
         self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment);
@@ -979,15 +1043,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            near_refundable_deposit += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+            refundable_near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
         }
 
         self.fungible_token.total_supply -= token_amount;
 
-        if near_refundable_deposit > 0 {
+        if refundable_near_amount > 0 {
             return PromiseOrValue::Promise(
                 Promise::new(predecessor_account_id)
-                    .transfer(near_refundable_deposit)
+                    .transfer(refundable_near_amount)
             )
         }
 
