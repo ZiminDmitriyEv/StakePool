@@ -670,12 +670,34 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         if predecessor_account_id == self.account_registry.self_fee_receiver_account_id {
             token_balance += instant_withdraw_fee_self_token_amount;
+        } else {
+            match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
+                Some(mut token_balance_) => {
+                    token_balance_ += instant_withdraw_fee_self_token_amount;
+
+                    self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance_);
+                }
+                None => {
+                    env::panic_str("Nonexecutable code. Object must exist.");
+                }
+            }
         }
         if predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
             token_balance += instant_withdraw_fee_partner_token_amount
+        } else {
+            match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
+                Some(mut token_balance_) => {
+                    token_balance_ += instant_withdraw_fee_partner_token_amount;
+
+                    self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance_);
+                }
+                None => {
+                    env::panic_str("Nonexecutable code. Object must exist.");
+                }
+            }
         }
 
-        let storage_staking_price_per_additional_account = if token_balance > 0
+        let storage_staking_price_per_additional_account_log = if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
@@ -720,12 +742,12 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 attached_deposit,
                 token_amount_log,
                 instant_withdraw_fee_self_log,
-                storage_staking_price_per_additional_account,
+                storage_staking_price_per_additional_account_log,
                 near_amount,
                 &current_account_id,
                 self.fungible_token.total_supply + token_amount,
                 &current_account_id,
-                self.fund.get_common_balance() + near_amount - storage_staking_price_per_additional_account - attached_deposit,
+                self.fund.get_common_balance() + near_amount - storage_staking_price_per_additional_account_log - attached_deposit,
                 &predecessor_account_id,
                 token_balance_log,
                 &predecessor_account_id,
