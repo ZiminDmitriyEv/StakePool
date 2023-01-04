@@ -29,6 +29,7 @@ use super::investment_withdrawal::InvestmentWithdrawal;
 use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
 use super::MINIMUN_DEPOSIT_AMOUNT;
+use super::reward::Reward;
 use super::shared_fee::SharedFee;
 use super::stake_decreasing_kind::StakeDecreasingType;
 use super::staking_contract_version::StakingContractVersion;
@@ -49,8 +50,7 @@ pub struct StakePool {
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
     validating: Validating,             // TODO как назвать это поле.
     current_epoch_height: EpochHeight,
-    previous_epoch_rewards_from_validators_near_amount: Balance,       // TODO МОЖет, сделать через ПрошлыйКурс?
-    total_rewards_from_validators_near_amount: Balance,       // TODO Все, что связано с ревардс, перенести в структуру?
+    reward: Reward
 }
 
 #[near_bindgen]
@@ -371,8 +371,10 @@ impl StakePool {
             fund: Fund::new(),
             validating: Validating::new(),
             current_epoch_height: env::epoch_height(),
-            previous_epoch_rewards_from_validators_near_amount: 0,
-            total_rewards_from_validators_near_amount: 0
+            reward: Reward {
+                previous_epoch_rewards_from_validators_near_amount: 0,
+                total_rewards_from_validators_near_amount: 0
+            }
         };
         stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.self_fee_receiver_account_id, &0);
         stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.partner_fee_receiver_account_id, &0);
@@ -1379,12 +1381,12 @@ impl StakePool {
                     env::panic_str("Some funds are not unstaked from validators.");
             }
 
-            self.fund.classic_staked_balance += self.previous_epoch_rewards_from_validators_near_amount;
+            self.fund.classic_staked_balance += self.reward.previous_epoch_rewards_from_validators_near_amount;
             self.validating.quantity_of_validators_updated_in_current_epoch = 0;
-            self.total_rewards_from_validators_near_amount += self.previous_epoch_rewards_from_validators_near_amount;     // TODO переназвать, Убрать в впомагательные параметры.
+            self.reward.total_rewards_from_validators_near_amount += self.reward.previous_epoch_rewards_from_validators_near_amount;
 
             let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
-                self.previous_epoch_rewards_from_validators_near_amount
+                self.reward.previous_epoch_rewards_from_validators_near_amount
             );
 
             if let Some(ref reward_fee) = self.fee_registry.reward_fee {
@@ -1423,7 +1425,7 @@ impl StakePool {
                 }
             }
 
-            self.previous_epoch_rewards_from_validators_near_amount = 0;
+            self.reward.previous_epoch_rewards_from_validators_near_amount = 0;
         }
 
         self.fund.is_distributed_on_validators_in_current_epoch = false;
@@ -2063,7 +2065,7 @@ impl StakePool {
             staked_balance: self.fund.get_staked_balance().into(),
             token_total_supply: self.fungible_token.total_supply.into(),
             token_accounts_quantity: self.fungible_token.accounts_quantity,
-            total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
+            total_rewards_from_validators_near_amount: self.reward.total_rewards_from_validators_near_amount.into(),
             reward_fee: self.get_fee_registry_light().reward_fee
         }
     }
@@ -2585,7 +2587,7 @@ impl StakePool {
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
                 self.validating.quantity_of_validators_updated_in_current_epoch += 1;
 
-                self.previous_epoch_rewards_from_validators_near_amount += staking_rewards_near_amount;
+                self.reward.previous_epoch_rewards_from_validators_near_amount += staking_rewards_near_amount;
 
                 CallbackResult {
                     is_success: true,
@@ -2635,13 +2637,6 @@ impl StakePool {
 // provide some guarantees. Read more about slashing in [Nightshade paper](https://near.ai/nightshade).
 
 
-
-
-// TODO TODO TODO TODO TODO ВСе коллбеки сделать так, чтоы приходило БорщСериалайзед данные, а не В Джсоне
-
-
-//  TODO TODO TODO ВСе Итераторы на Вью делать через индекс.     https://github.com/NearDeFi/burrowland/blob/0dbfa1803bf26353ffbee2ffd4f494bab23b2756/contract/src/account.rs#L207
-
 // TODO TODO TODO TODO TODO Важно запрашивать необходимое количество газа, чтобы хватило на  контракт + кроссколл + коллбек. Иначе что-то выполнится, а что-то нет.
 
 // TODO C Валидатора, по идее, придет немного больше неар, чем запрошено по методам, так как мы ожидаем запрос на Анстейк 4 эпохи, в это время количество отдаваемого зафиксировано, но оно еще приносит прибыль (затем еще 4 эпохи, чтобы забрать), что с этим делать?
@@ -2654,25 +2649,16 @@ impl StakePool {
 
 // TODO TODO TODO TODO TODO Можно ли будет перейти на МУЛЬТИСИГ флоу управления после деплоя классического флоу управления.
 
-// TODO логировать
-
 // проверить, что у каждого свойства структуры есть инкремент и дикремент.
 
 
 // https://nomicon.io/Standards  Евенты и подобное.
-
-
 
 // // use near_contract_standards::fungible_token::core::FungibleTokenCore;
 // use near_contract_standards::fungible_token::events  - посмотреть, какие нужны
 // use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
 // https://learn.figment.io/tutorials/stake-fungible-token
 
-// Нужна ли фабрика?
-
-// TODO проработать логи, то есть, втсавлять в них конкретные значения
-
-// TODO подумать, как поступать с аккаунтами при "снятии в ноль". Сейчас аккаунт удаляется и средства за сс отдаются, но можно и просто оставлять аккаунт с 0 значенями
 
 // НАписать DecreaseValidatorStake относительно менеджера, причем это не должно влиять на возможность снятия средств пользователями.
 
@@ -2683,7 +2669,7 @@ impl StakePool {
 
 // НУжно ли добавить метод рестейк внутрь пула для каждого валидатора?
 
-// сделать логи, и запустиь на крон. Затем сделать курс через добавочный фонд
+//  сделать курс через добавочный фонд
 
 
 // Анстейкед Баланс на структуре валидатора и контракте не сходится. Проверить на новом контракте, почему так.

@@ -14,6 +14,7 @@ pub(crate) mod fungible_token_metadata;
 pub(crate) mod fungible_token;
 pub(crate) mod investment_withdrawal;
 pub(crate) mod investor_investment;
+pub(crate) mod reward;
 pub(crate) mod shared_fee;
 pub(crate) mod stake_decreasing_kind;
 pub(crate) mod staking_contract_version;
