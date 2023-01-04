@@ -5,7 +5,7 @@ use near_sdk::serde::{Deserialize, Serialize};
 
 #[derive(BorshDeserialize, BorshSerialize, Clone, Deserialize, Serialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct FungibleTokenMetadata {
+pub struct FungibleTokenMetadata {          // TODO Через библиотечный
     pub spec: String,
     pub name: String,
     pub symbol: String,

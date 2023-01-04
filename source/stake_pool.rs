@@ -632,43 +632,29 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
-        let mut instant_withdraw_fee_self: Option<Fee> = None;
+        let mut instant_withdraw_fee_self_token_amount: u128 = 0;
+
+        let mut instant_withdraw_fee_partner_token_amount: u128 = 0;
+
+        let mut instant_withdraw_fee_self_log: Option<Fee> = None;
 
         if let Some(ref instant_withdraw_fee) = self.fee_registry.instant_withdraw_fee {
-            instant_withdraw_fee_self = Some(instant_withdraw_fee.self_fee.clone());
+            instant_withdraw_fee_self_log = Some(instant_withdraw_fee.self_fee.clone());
 
-            let mut instant_withdraw_fee_self_token_amount = instant_withdraw_fee.self_fee.multiply(token_amount);
-            if instant_withdraw_fee_self_token_amount != 0 {
-                token_amount -= instant_withdraw_fee_self_token_amount;
+            let mut instant_withdraw_fee_self_token_amount_ = instant_withdraw_fee.self_fee.multiply(token_amount);
+            if instant_withdraw_fee_self_token_amount_ != 0 {
+                token_amount -= instant_withdraw_fee_self_token_amount_;
 
                 if let Some(ref instant_withdraw_fee_partner) = instant_withdraw_fee.partner_fee {
-                    let instant_withdraw_fee_partner_token_amount = instant_withdraw_fee_partner.multiply(instant_withdraw_fee_self_token_amount);
-                    if instant_withdraw_fee_partner_token_amount != 0 {
-                        instant_withdraw_fee_self_token_amount -= instant_withdraw_fee_partner_token_amount;
+                    let instant_withdraw_fee_partner_token_amount_ = instant_withdraw_fee_partner.multiply(instant_withdraw_fee_self_token_amount_);
+                    if instant_withdraw_fee_partner_token_amount_ != 0 {
+                        instant_withdraw_fee_partner_token_amount = instant_withdraw_fee_partner_token_amount_;
 
-                        match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
-                            Some(mut token_balance_) => {
-                                token_balance_ += instant_withdraw_fee_partner_token_amount;
-
-                                self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance_);
-                            }
-                            None => {
-                                env::panic_str("Nonexecutable code. Object must exist.");
-                            }
-                        }
+                        instant_withdraw_fee_self_token_amount_ -= instant_withdraw_fee_partner_token_amount_;
                     }
                 }
 
-                match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
-                    Some(mut token_balance_) => {
-                        token_balance_ += instant_withdraw_fee_self_token_amount;
-
-                        self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance_);
-                    }
-                    None => {
-                        env::panic_str("Nonexecutable code. Object must exist.");
-                    }
-                }
+                instant_withdraw_fee_self_token_amount = instant_withdraw_fee_self_token_amount_;
             }
         }
 
@@ -683,6 +669,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
 
         self.fund.classic_unstaked_balance -= near_amount;
+
+        if predecessor_account_id == self.account_registry.self_fee_receiver_account_id {
+            token_balance += instant_withdraw_fee_self_token_amount;
+        }
+        if predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
+            token_balance += instant_withdraw_fee_partner_token_amount
+        }
 
         let storage_staking_price_per_additional_account = if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
@@ -728,7 +721,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 self.current_epoch_height,
                 attached_deposit,
                 token_amount_log,
-                instant_withdraw_fee_self,
+                instant_withdraw_fee_self_log,
                 storage_staking_price_per_additional_account,
                 near_amount,
                 &current_account_id,
@@ -1884,19 +1877,13 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
     fn internal_get_aggregated(&self) -> Aggregated {
         self.assert_epoch_is_synchronized();
 
-        let reward_fee_self = if let Some(ref reward_fee) = self.fee_registry.reward_fee {
-            Some(reward_fee.self_fee.clone())
-        } else {
-            None
-        };
-
         Aggregated {
             unstaked_balance: self.fund.classic_unstaked_balance.into(),
             staked_balance: self.fund.get_staked_balance().into(),
             token_total_supply: self.fungible_token.total_supply.into(),
             token_accounts_quantity: self.fungible_token.accounts_quantity,
             total_rewards_from_validators_near_amount: self.total_rewards_from_validators_near_amount.into(),
-            reward_fee: reward_fee_self
+            reward_fee: self.get_fee_registry_light().reward_fee
         }
     }
 
