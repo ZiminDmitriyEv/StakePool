@@ -832,7 +832,6 @@ impl StakePool {
                 )
             }
         };
-
         delayed_withdrawal.near_amount += near_amount;
         delayed_withdrawal.started_epoch_height = env::epoch_height();
         self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
