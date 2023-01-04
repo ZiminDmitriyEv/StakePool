@@ -598,8 +598,6 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
-
-// Процент не кладется на счет, если это аккаунт из структуры. Изменить везде
     fn internal_instant_withdraw(&mut self, mut token_amount: Balance) -> Promise {
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
