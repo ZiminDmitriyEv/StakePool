@@ -830,13 +830,13 @@ impl StakePool {
                     0,
                     DelayedWithdrawal {
                         near_amount: 0,
-                        started_epoch_height: env::epoch_height()
+                        started_epoch_height: self.current_epoch_height
                     },
                 )
             }
         };
         delayed_withdrawal.near_amount += near_amount;
-        delayed_withdrawal.started_epoch_height = env::epoch_height();
+        delayed_withdrawal.started_epoch_height = self.current_epoch_height;
         self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
@@ -1040,12 +1040,12 @@ impl StakePool {
                     0,
                     DelayedWithdrawal {
                         near_amount: 0,
-                        started_epoch_height: env::epoch_height()
+                        started_epoch_height: self.current_epoch_height
                     }
                 )
             }
         };
-        delayed_withdrawal.started_epoch_height = env::epoch_height();
+        delayed_withdrawal.started_epoch_height = self.current_epoch_height;
         delayed_withdrawal.near_amount += near_amount;
         self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
 
@@ -2697,6 +2697,3 @@ impl StakePool {
 
 
 // internal_delayed_withdraw_from_validator  проверить, что нельзя перезапросить с валидатора больше, чем есть на самом деле.
-
-
-// DelayedWithdrawal - там епоха со структуры нужно брать
