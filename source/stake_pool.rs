@@ -1,5 +1,6 @@
 use core::convert::Into;
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
+use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
@@ -48,7 +49,7 @@ pub struct StakePool {
     fungible_token: FungibleToken,
     fund: Fund,
     fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
-    validating: Validating,             // TODO как назвать это поле.
+    validating: Validating,
     current_epoch_height: EpochHeight,
     reward: Reward
 }
@@ -59,6 +60,7 @@ impl StakePool {
 
     #[init]
     pub fn new(
+        fungible_token_metadata: FungibleTokenMetadata,
         manager_id: Option<AccountId>,
         self_fee_receiver_account_id: AccountId,
         partner_fee_receiver_account_id: AccountId,
@@ -66,8 +68,9 @@ impl StakePool {
         reward_fee_partner: Option<Fee>,
         instant_withdraw_fee_self: Option<Fee>,
         instant_withdraw_fee_partner: Option<Fee>
-    ) -> Self {      // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
+    ) -> Self {                                          // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
         Self::internal_new(
+            fungible_token_metadata,
             manager_id,
             self_fee_receiver_account_id,
             partner_fee_receiver_account_id,
@@ -293,6 +296,7 @@ impl FungibleTokenCore for StakePool {
 
 impl StakePool {
     fn internal_new(
+        fungible_token_metadata: FungibleTokenMetadata,
         manager_id: Option<AccountId>,
         self_fee_receiver_account_id: AccountId,
         partner_fee_receiver_account_id: AccountId,
@@ -304,6 +308,8 @@ impl StakePool {
         if env::state_exists() {
             env::panic_str("Contract state is already initialize.");
         }
+
+        fungible_token_metadata.assert_valid();
 
         if self_fee_receiver_account_id == partner_fee_receiver_account_id {
             env::panic_str("The self fee receiver account and partner fee receiver account can not be the same.");
@@ -367,7 +373,7 @@ impl StakePool {
                 reward_fee,
                 instant_withdraw_fee
             },
-            fungible_token: FungibleToken::new(predecessor_account_id),
+            fungible_token: FungibleToken::new(predecessor_account_id, fungible_token_metadata),
             fund: Fund::new(),
             validating: Validating::new(),
             current_epoch_height: env::epoch_height(),
@@ -2683,3 +2689,5 @@ impl StakePool {
 
 
 // internal_delayed_withdraw_from_validator  проверить, что нельзя перезапросить с валидатора больше, чем есть на самом деле.
+
+// FungibleTokenMetadataProvider
