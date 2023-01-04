@@ -475,7 +475,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     .transfer(refundable_near_amount);
             }
 
-            let current_account_id = env::current_account_id();
+            let current_account_id_log = env::current_account_id();
             env::log_str(
                 format!(
                     "
@@ -492,15 +492,15 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     New @{} balance is {} yoctoNear.
                     New @{} total supply is {} yoctoStNear.
                     ",
-                    &current_account_id,
+                    &current_account_id_log,
                     self.current_epoch_height,
                     attached_deposit,
                     near_amount,
                     storage_staking_price_per_additional_account,
                     refundable_near_amount,
-                    &current_account_id,
+                    &current_account_id_log,
                     self.fungible_token.total_supply - token_amount,
-                    &current_account_id,
+                    &current_account_id_log,
                     self.fund.get_common_balance() - near_amount,
                     &predecessor_account_id,
                     token_balance - token_amount,
@@ -508,9 +508,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     token_amount,
                     &predecessor_account_id,
                     token_balance,
-                    &current_account_id,
+                    &current_account_id_log,
                     self.fund.get_common_balance(),
-                    &current_account_id,
+                    &current_account_id_log,
                     self.fungible_token.total_supply
                 ).as_str()
             );
@@ -720,7 +720,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         near_amount += attached_deposit;
 
-        let current_account_id = env::current_account_id();
+        let current_account_id_log = env::current_account_id();
         env::log_str(
             format!(
                 "
@@ -737,24 +737,24 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 New @{} balance is {} yoctoNear.
                 New @{} total supply is {} yoctoStNear.
                 ",
-                &current_account_id,
+                &current_account_id_log,
                 self.current_epoch_height,
                 attached_deposit,
                 token_amount_log,
                 instant_withdraw_fee_self_log,
                 storage_staking_price_per_additional_account_log,
                 near_amount,
-                &current_account_id,
+                &current_account_id_log,
                 self.fungible_token.total_supply + token_amount,
-                &current_account_id,
+                &current_account_id_log,
                 self.fund.get_common_balance() + near_amount - storage_staking_price_per_additional_account_log - attached_deposit,
                 &predecessor_account_id,
                 token_balance_log,
                 &predecessor_account_id,
                 token_balance,
-                &current_account_id,
+                &current_account_id_log,
                 self.fund.get_common_balance(),
-                &current_account_id,
+                &current_account_id_log,
                 self.fungible_token.total_supply
             ).as_str()
         );
@@ -2097,7 +2097,7 @@ impl StakePool {
                 .transfer(refundable_near_amount);
         }
 
-        let current_account_id = env::current_account_id();
+        let current_account_id_log = env::current_account_id();
         env::log_str(
             format!(
                 "
@@ -2115,15 +2115,15 @@ impl StakePool {
                 New @{} total supply is {} yoctoStNear.
                 ",
                 &validator_account_id,
-                &current_account_id,
+                &current_account_id_log,
                 env::epoch_height(),
                 attached_deposit,
                 near_amount,
                 storage_staking_price_per_additional_account,
                 refundable_near_amount,
-                &current_account_id,
+                &current_account_id_log,
                 self.fungible_token.total_supply - token_amount,
-                &current_account_id,
+                &current_account_id_log,
                 self.fund.get_common_balance() - near_amount,
                 &predecessor_account_id,
                 token_balance - token_amount,
@@ -2131,9 +2131,9 @@ impl StakePool {
                 token_amount,
                 &predecessor_account_id,
                 token_balance,
-                &current_account_id,
+                &current_account_id_log,
                 self.fund.get_common_balance(),
-                &current_account_id,
+                &current_account_id_log,
                 self.fungible_token.total_supply
             ).as_str()
         );
@@ -2203,7 +2203,7 @@ impl StakePool {
                         .transfer(refundable_near_amount);
                 }
 
-                let current_account_id = env::current_account_id();
+                let current_account_id_log = env::current_account_id();
                 env::log_str(
                     format!(
                         "
@@ -2221,15 +2221,15 @@ impl StakePool {
                         New @{} total supply is {} yoctoStNear.
                         ",
                         &validator_account_id,
-                        &current_account_id,
+                        &current_account_id_log,
                         env::epoch_height(),
                         attached_deposit,
                         near_amount,
                         storage_staking_price_per_additional_accounts,
                         refundable_near_amount,
-                        &current_account_id,
+                        &current_account_id_log,
                         self.fungible_token.total_supply - token_amount,
-                        &current_account_id,
+                        &current_account_id_log,
                         self.fund.get_common_balance() - near_amount,
                         &predecessor_account_id,
                         token_balance - token_amount,
@@ -2237,9 +2237,9 @@ impl StakePool {
                         token_amount,
                         &predecessor_account_id,
                         token_balance,
-                        &current_account_id,
+                        &current_account_id_log,
                         self.fund.get_common_balance(),
-                        &current_account_id,
+                        &current_account_id_log,
                         self.fungible_token.total_supply
                     ).as_str()
                 );
