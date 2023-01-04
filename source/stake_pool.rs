@@ -799,32 +799,39 @@ impl StakePool {
 
         let (
             mut refundable_near_amount,
-            mut delayed_withdrawal,
-            reserved_storage_staking_price_per_additional_delayed_withdrawal_log
+            reserved_storage_staking_price_per_additional_delayed_withdrawal_log,
+            delayed_withdrawal_near_amount_log,
+            epoch_quantity_to_take_delayed_withdrawal_log,
+            mut delayed_withdrawal
         ) = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
             Some(delayed_withdrawal_) => {
-                (attached_deposit, delayed_withdrawal_, 0)
+                (
+                    attached_deposit,
+                    0,
+                    delayed_withdrawal_.near_amount,
+                    delayed_withdrawal_.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+                    delayed_withdrawal_
+                )
             }
             None => {
-                let storage_staking_price_per_additional_delayed_withdrawal = Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
+                let storage_staking_price_per_additional_delayed_withdrawal =
+                    Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_delayed_withdrawal);
                 if attached_deposit < storage_staking_price_per_additional_delayed_withdrawal {
                     env::panic_str("Insufficient near deposit.");
                 }
 
                 (
                     attached_deposit - storage_staking_price_per_additional_delayed_withdrawal,
+                    storage_staking_price_per_additional_delayed_withdrawal,
+                    0,
+                    0,
                     DelayedWithdrawal {
                         near_amount: 0,
                         started_epoch_height: env::epoch_height()
                     },
-                    storage_staking_price_per_additional_delayed_withdrawal
                 )
             }
         };
-
-        let delayed_withdrawal_near_amount_log = delayed_withdrawal.near_amount;
-
-        let epoch_quantity_to_take_delayed_withdrawal_log = delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height);
 
         delayed_withdrawal.near_amount += near_amount;
         delayed_withdrawal.started_epoch_height = env::epoch_height();
@@ -847,7 +854,8 @@ impl StakePool {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            let storage_staking_price_per_additional_account = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+            let storage_staking_price_per_additional_account =
+                Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
 
             refundable_near_amount += storage_staking_price_per_additional_account;
 
