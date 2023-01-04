@@ -733,6 +733,7 @@ impl StakePool {
                 Old @{} total supply is {} yoctoStNear.
                 Old @{} balance is {} yoctoNear.
                 Old @{} balance is {} yoctoStNear.
+                @{} sent {} yoctoStNear.
                 New @{} balance is {} yoctoStNear.
                 New @{} balance is {} yoctoNear.
                 New @{} total supply is {} yoctoStNear.
@@ -750,6 +751,8 @@ impl StakePool {
                 self.fund.get_common_balance() + near_amount - released_storage_staking_price_per_additional_account_log - attached_deposit,
                 &predecessor_account_id,
                 token_balance_log,
+                &predecessor_account_id,
+                token_amount,
                 &predecessor_account_id,
                 token_balance,
                 &current_account_id_log,
@@ -881,6 +884,7 @@ impl StakePool {
                 Old @{} total supply is {} yoctoStNear.
                 Old @{} balance is {} yoctoNear.
                 Old @{} balance is {} yoctoStNear.
+                @{} sent {} yoctoStNear.
                 New @{} balance is {} yoctoStNear.
                 New @{} balance is {} yoctoNear.
                 New @{} total supply is {} yoctoStNear.
@@ -904,6 +908,8 @@ impl StakePool {
                 &predecessor_account_id,
                 token_balance + token_amount,
                 &predecessor_account_id,
+                token_amount,
+                &predecessor_account_id,
                 token_balance,
                 &current_account_id_log,
                 self.fund.get_common_balance(),
@@ -921,7 +927,7 @@ impl StakePool {
 
         PromiseOrValue::Value(())
     }
-// если вс. сумму с валидатора снимают, то уничтожается ли аккаунт и добавляется ли платеж сумма стораджа
+
     fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
@@ -962,9 +968,13 @@ impl StakePool {
 
         let attached_deposit = env::attached_deposit();
 
-        let (mut refundable_near_amount, mut investment_withdrawal) =
+        let (
+            mut refundable_near_amount,
+            mut investment_withdrawal,
+            mut reserved_storage_staking_price_per_additional_accounts_log
+        ) =
             match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
-            Some(investment_withdrawal_) => (attached_deposit, investment_withdrawal_),
+            Some(investment_withdrawal_) => (attached_deposit, investment_withdrawal_, 0),
             None => {
                 let storage_staking_price_per_additional_investment_withdrawal =
                     Self::calculate_storage_staking_price(self.fund.delayed_withdrawn_fund.storage_usage_per_investment_withdrawal);
@@ -977,7 +987,8 @@ impl StakePool {
                     InvestmentWithdrawal {
                         near_amount: 0,
                         account_id: predecessor_account_id.clone()
-                    }
+                    },
+                    storage_staking_price_per_additional_investment_withdrawal
                 )
             }
         };
@@ -1001,11 +1012,18 @@ impl StakePool {
         }
 
         self.fund.investment_staked_balance -= near_amount;
-        let mut delayed_withdrawal = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
-            Some(mut delayed_withdrawal_) => {
-                delayed_withdrawal_.started_epoch_height = env::epoch_height();
 
-                delayed_withdrawal_
+        let (
+            delayed_withdrawal_near_amount_log,
+            epoch_quantity_to_take_delayed_withdrawal_log,
+            mut delayed_withdrawal
+         ) = match self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.get(&predecessor_account_id) {
+            Some(delayed_withdrawal_) => {
+                (
+                    delayed_withdrawal_.near_amount,
+                    delayed_withdrawal_.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+                    delayed_withdrawal_
+                )
             }
             None => {
                 let storage_staking_price_per_additional_delayed_withdrawal =
@@ -1015,12 +1033,19 @@ impl StakePool {
                 }
                 refundable_near_amount -= storage_staking_price_per_additional_delayed_withdrawal;
 
-                DelayedWithdrawal {
-                    near_amount: 0,
-                    started_epoch_height: env::epoch_height()
-                }
+                reserved_storage_staking_price_per_additional_accounts_log += storage_staking_price_per_additional_delayed_withdrawal;
+
+                (
+                    0,
+                    0,
+                    DelayedWithdrawal {
+                        near_amount: 0,
+                        started_epoch_height: env::epoch_height()
+                    }
+                )
             }
         };
+        delayed_withdrawal.started_epoch_height = env::epoch_height();
         delayed_withdrawal.near_amount += near_amount;
         self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
 
@@ -1028,16 +1053,23 @@ impl StakePool {
         self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.insert(&validator_account_id, &investment_withdrawal);
         self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount += near_amount;
 
-        if near_amount < staked_balance {
+        let mut released_storage_staking_price_per_additional_accounts_log = if near_amount < staked_balance {
             staked_balance -= near_amount;
 
             investor_investment.distribution_registry.insert(&validator_account_id, &staked_balance);
+
+            0
         } else {
             investor_investment.distribution_registry.remove(&validator_account_id);
             investor_investment.distributions_quantity -= 1;
 
-            refundable_near_amount += Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
-        }
+            let storage_staking_price_per_additional_distribution =
+                Self::calculate_storage_staking_price(self.validating.storage_usage_per_distribution);
+
+            refundable_near_amount += storage_staking_price_per_additional_distribution;
+
+            storage_staking_price_per_additional_distribution
+        };
         investor_investment.staked_balance -= near_amount;
         self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment);
 
@@ -1050,10 +1082,68 @@ impl StakePool {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            refundable_near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+            let storage_staking_price_per_additional_account =
+                Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+
+            refundable_near_amount += storage_staking_price_per_additional_account;
+
+            released_storage_staking_price_per_additional_accounts_log += storage_staking_price_per_additional_account;
         }
 
         self.fungible_token.total_supply -= token_amount;
+
+        let current_account_id_log = env::current_account_id();
+        env::log_str(
+            format!(
+                "
+                Delayed withdrawing from @{} via @{} in {} epoch.
+                Attached deposit is {} yoctoNear.
+                Exchangeable deposit is {} yoctoNear.
+                Refundable deposit is {} yoctoNear.
+                Reserved storage staking price is {} yoctoNear.
+                Released storage staking price is {} yoctoNear.
+                Old expected for receiving amount is {} yoctoNear.
+                Old epoch quantity to take delayed withdrawal is {}.
+                Additional expected for receiving amount is {} yoctoNear.
+                New expected for receiving amount is {} yoctoNear.
+                New epoch quantity to take delayed withdrawal is {}.
+                Old @{} total supply is {} yoctoStNear.
+                Old @{} balance is {} yoctoNear.
+                Old @{} balance is {} yoctoStNear.
+                @{} sent {} yoctoStNear.
+                New @{} balance is {} yoctoStNear.
+                New @{} balance is {} yoctoNear.
+                New @{} total supply is {} yoctoStNear.
+                ",
+                &validator_account_id,
+                &current_account_id_log,
+                self.current_epoch_height,
+                attached_deposit,
+                near_amount,
+                refundable_near_amount,
+                reserved_storage_staking_price_per_additional_accounts_log,
+                released_storage_staking_price_per_additional_accounts_log,
+                delayed_withdrawal_near_amount_log,
+                epoch_quantity_to_take_delayed_withdrawal_log,
+                near_amount,
+                delayed_withdrawal.near_amount,
+                delayed_withdrawal.get_epoch_quantity_to_take_delayed_withdrawal(self.current_epoch_height),
+                &current_account_id_log,
+                self.fungible_token.total_supply + token_amount,
+                &current_account_id_log,
+                self.fund.get_common_balance() + near_amount,
+                &predecessor_account_id,
+                token_balance + token_amount,
+                &predecessor_account_id,
+                token_amount,
+                &predecessor_account_id,
+                token_balance,
+                &current_account_id_log,
+                self.fund.get_common_balance(),
+                &current_account_id_log,
+                self.fungible_token.total_supply
+            ).as_str()
+        );
 
         if refundable_near_amount > 0 {
             return PromiseOrValue::Promise(
@@ -1605,7 +1695,7 @@ impl StakePool {
         self.fund.is_distributed_on_validators_in_current_epoch = true;
     }
 
-    fn internal_ft_transfer(&mut self, receiver_account_id: AccountId, token_amount: Balance) -> Promise {     // TODO стоит ли удалять токен-аккаунт с нулевым балансом. Сейчас я его удаляю. нет механизма регистрации. Сейчас регистрируется тоько при депозите
+    fn internal_ft_transfer(&mut self, receiver_account_id: AccountId, token_amount: Balance) -> Promise {
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
 
@@ -2607,3 +2697,6 @@ impl StakePool {
 
 
 // internal_delayed_withdraw_from_validator  проверить, что нельзя перезапросить с валидатора больше, чем есть на самом деле.
+
+
+// DelayedWithdrawal - там епоха со структуры нужно брать
