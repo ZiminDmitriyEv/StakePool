@@ -291,7 +291,7 @@ impl FungibleTokenCore for StakePool {
     }
 }
 
-impl StakePool {        // TODO TODO TODO добавить логи к каждой манипуляции с деньгами или event. Интерфейсы
+impl StakePool {
     fn internal_new(
         manager_id: Option<AccountId>,
         self_fee_receiver_account_id: AccountId,
@@ -2597,3 +2597,6 @@ impl StakePool {
 
 
 // измененяи михаила
+
+
+// internal_delayed_withdraw_from_validator  проверить, что нельзя перезапросить с валидатора больше, чем есть на самом деле.
