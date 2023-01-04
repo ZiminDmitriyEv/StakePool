@@ -1,6 +1,6 @@
 use near_sdk::{EpochHeight, Balance, env};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
-use super::EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL;
+use super::EPOCH_QUANTITY_FOR_DELAYED_WITHDRAWAL;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct DelayedWithdrawal {
@@ -19,8 +19,8 @@ impl DelayedWithdrawal {
         }
         let passed_epoch_height = current_epoch_height - self.started_epoch_height;
 
-        if EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL > passed_epoch_height {
-            EPOCH_QUANTITY_TO_DELAYED_WITHDRAWAL - passed_epoch_height
+        if EPOCH_QUANTITY_FOR_DELAYED_WITHDRAWAL > passed_epoch_height {
+            EPOCH_QUANTITY_FOR_DELAYED_WITHDRAWAL - passed_epoch_height
         } else {
             0
         }

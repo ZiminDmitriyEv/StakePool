@@ -22,6 +22,7 @@ use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
 use super::data_transfer_object::storage_staking_requested_coverage::StorageStakingRequestedCoverage;
 use super::data_transfer_object::validator::Validator as ValidatorDto;
 use super::delayed_withdrawal::DelayedWithdrawal;
+use super::EPOCH_QUANTITY_FOR_VALIDATOR_UNSTAKE;
 use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fund::Fund;
@@ -2199,7 +2200,7 @@ impl StakePool {
     }
 
     fn is_right_epoch(epoch_height: EpochHeight) -> bool {
-        (epoch_height % 4) == 0                                                      // TODO  цифру 4 - в константу положить.
+        (epoch_height % EPOCH_QUANTITY_FOR_VALIDATOR_UNSTAKE) == 0
     }
 
     fn calculate_storage_staking_price(quantity_of_bytes: StorageUsage) -> Balance {
