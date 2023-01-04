@@ -598,16 +598,18 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         }
     }
 
+
+// Процент не кладется на счет, если это аккаунт из структуры. Изменить везде
     fn internal_instant_withdraw(&mut self, mut token_amount: Balance) -> Promise {
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
 
-        let token_amount_ = token_amount;
-
         if token_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
+
+        let token_amount_log = token_amount;
 
         let predecessor_account_id = env::predecessor_account_id();
 
@@ -621,7 +623,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
-        let token_balance_ = token_balance;
+        let token_balance_log = token_balance;
 
         token_balance -= token_amount;
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
@@ -725,7 +727,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 &current_account_id,
                 self.current_epoch_height,
                 attached_deposit,
-                token_amount_,
+                token_amount_log,
                 instant_withdraw_fee_self,
                 storage_staking_price_per_additional_account,
                 near_amount,
@@ -734,7 +736,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                 &current_account_id,
                 self.fund.get_common_balance() + near_amount - storage_staking_price_per_additional_account - attached_deposit,
                 &predecessor_account_id,
-                token_balance_,
+                token_balance_log,
                 &predecessor_account_id,
                 token_balance,
                 &current_account_id,
