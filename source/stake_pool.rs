@@ -482,9 +482,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     Deposited to @{} in {} epoch.
                     Attached deposit is {} yoctoNear.
                     Exchangeable deposit is {} yoctoNear.
-                    Storage staking price is {} yoctoNear.
+                    Reserved storage staking price is {} yoctoNear.
                     Refundable deposit is {} yoctoNear.
-                    Old @{} balance is {} yoctoStNear.
+                    Old @{} total supply is {} yoctoStNear.
                     Old @{} balance is {} yoctoNear.
                     Old @{} balance is {} yoctoStNear.
                     @{} received {} yoctoStNear.
@@ -499,9 +499,9 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
                     storage_staking_price_per_additional_account,
                     refundable_near_amount,
                     &current_account_id,
-                    self.fund.get_common_balance() - near_amount,
-                    &current_account_id,
                     self.fungible_token.total_supply - token_amount,
+                    &current_account_id,
+                    self.fund.get_common_balance() - near_amount,
                     &predecessor_account_id,
                     token_balance - token_amount,
                     &predecessor_account_id,
@@ -603,6 +603,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
         Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
 
+        let token_amount_ = token_amount;
+
         if token_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
@@ -619,6 +621,8 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
+        let token_balance_ = token_balance;
+
         token_balance -= token_amount;
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
             if self.convert_token_amount_to_near_amount(token_balance) < investor_investment.staked_balance {
@@ -626,7 +630,11 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
             }
         }
 
+        let mut instant_withdraw_fee_self: Option<Fee> = None;
+
         if let Some(ref instant_withdraw_fee) = self.fee_registry.instant_withdraw_fee {
+            instant_withdraw_fee_self = Some(instant_withdraw_fee.self_fee.clone());
+
             let mut instant_withdraw_fee_self_token_amount = instant_withdraw_fee.self_fee.multiply(token_amount);
             if instant_withdraw_fee_self_token_amount != 0 {
                 token_amount -= instant_withdraw_fee_self_token_amount;
@@ -674,20 +682,67 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         self.fund.classic_unstaked_balance -= near_amount;
 
-        if token_balance > 0
+        let storage_staking_price_per_additional_account = if token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+
+            0
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
-        }
+            let storage_staking_price_per_additional_account_ = Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
+
+            near_amount += storage_staking_price_per_additional_account_;
+
+            storage_staking_price_per_additional_account_
+        };
 
         self.fungible_token.total_supply -= token_amount;
 
-        near_amount += env::attached_deposit();
+        let attached_deposit = env::attached_deposit();
+
+        near_amount += attached_deposit;
+
+        let current_account_id = env::current_account_id();
+        env::log_str(
+            format!(
+                "
+                Instant withdrawing from @{} in {} epoch.
+                Attached deposit is {} yoctoNear.
+                Exchangeable deposit is {} yoctoStNear.
+                Fee is {:?}.
+                Released storage staking price is {} yoctoNear.
+                Received amount is {} yoctoNear.
+                Old @{} total supply is {} yoctoStNear.
+                Old @{} balance is {} yoctoNear.
+                Old @{} balance is {} yoctoStNear.
+                New @{} balance is {} yoctoStNear.
+                New @{} balance is {} yoctoNear.
+                New @{} total supply is {} yoctoStNear.
+                ",
+                &current_account_id,
+                self.current_epoch_height,
+                attached_deposit,
+                token_amount_,
+                instant_withdraw_fee_self,
+                storage_staking_price_per_additional_account,
+                near_amount,
+                &current_account_id,
+                self.fungible_token.total_supply + token_amount,
+                &current_account_id,
+                self.fund.get_common_balance() + near_amount - storage_staking_price_per_additional_account - attached_deposit,
+                &predecessor_account_id,
+                token_balance_,
+                &predecessor_account_id,
+                token_balance,
+                &current_account_id,
+                self.fund.get_common_balance(),
+                &current_account_id,
+                self.fungible_token.total_supply
+            ).as_str()
+        );
 
         Promise::new(predecessor_account_id)
             .transfer(near_amount)
@@ -780,7 +835,7 @@ impl StakePool {        // TODO TODO TODO добавить логи к кажд�
 
         PromiseOrValue::Value(())
     }
-
+// если вс. сумму с валидатора снимают, то уничтожается ли аккаунт и добавляется ли платеж сумма стораджа
     fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
@@ -2040,9 +2095,9 @@ impl StakePool {
                 Deposited to @{} via @{} in {} epoch.
                 Attached deposit is {} yoctoNear.
                 Exchangeable deposit is {} yoctoNear.
-                Storage staking price is {} yoctoNear.
+                Reserved storage staking price is {} yoctoNear.
                 Refundable deposit is {} yoctoNear.
-                Old @{} balance is {} yoctoStNear.
+                Old @{} total supply is {} yoctoStNear.
                 Old @{} balance is {} yoctoNear.
                 Old @{} balance is {} yoctoStNear.
                 @{} received {} yoctoStNear.
@@ -2058,9 +2113,9 @@ impl StakePool {
                 storage_staking_price_per_additional_account,
                 refundable_near_amount,
                 &current_account_id,
-                self.fund.get_common_balance() - near_amount,
-                &current_account_id,
                 self.fungible_token.total_supply - token_amount,
+                &current_account_id,
+                self.fund.get_common_balance() - near_amount,
                 &predecessor_account_id,
                 token_balance - token_amount,
                 &predecessor_account_id,
@@ -2146,9 +2201,9 @@ impl StakePool {
                         Deposited to @{} via @{} in {} epoch.
                         Attached deposit is {} yoctoNear.
                         Exchangeable deposit is {} yoctoNear.
-                        Storage staking price is {} yoctoNear.
+                        Reserved storage staking price is {} yoctoNear.
                         Refundable deposit is {} yoctoNear.
-                        Old @{} balance is {} yoctoStNear.
+                        Old @{} total supply is {} yoctoStNear.
                         Old @{} balance is {} yoctoNear.
                         Old @{} balance is {} yoctoStNear.
                         @{} received {} yoctoStNear.
@@ -2164,9 +2219,9 @@ impl StakePool {
                         storage_staking_price_per_additional_accounts,
                         refundable_near_amount,
                         &current_account_id,
-                        self.fund.get_common_balance() - near_amount,
-                        &current_account_id,
                         self.fungible_token.total_supply - token_amount,
+                        &current_account_id,
+                        self.fund.get_common_balance() - near_amount,
                         &predecessor_account_id,
                         token_balance - token_amount,
                         &predecessor_account_id,
@@ -2449,10 +2504,6 @@ impl StakePool {
 
 // TODO подумать, как поступать с аккаунтами при "снятии в ноль". Сейчас аккаунт удаляется и средства за сс отдаются, но можно и просто оставлять аккаунт с 0 значенями
 
-
-
-
-
 // НАписать DecreaseValidatorStake относительно менеджера, причем это не должно влиять на возможность снятия средств пользователями.
 
 
@@ -2463,3 +2514,13 @@ impl StakePool {
 // НУжно ли добавить метод рестейк внутрь пула для каждого валидатора?
 
 // сделать логи, и запустиь на крон. Затем сделать курс через добавочный фонд
+
+
+// Анстейкед Баланс на структуре валидатора и контракте не сходится. Проверить на новом контракте, почему так.
+
+
+
+// pool30 задеплоить.
+
+
+// измененяи михаила

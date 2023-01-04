@@ -9,7 +9,7 @@ construct_uint! {
     pub struct U256(4);
 }
 
-#[derive(Clone, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub struct Fee {
     pub numerator: u64,
