@@ -1,6 +1,6 @@
 use core::convert::Into;
 use near_contract_standards::fungible_token::core::FungibleTokenCore;
-use near_contract_standards::fungible_token::metadata::FungibleTokenMetadata;
+use near_contract_standards::fungible_token::metadata::{FungibleTokenMetadata, FT_METADATA_SPEC};
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
@@ -16,6 +16,7 @@ use super::data_transfer_object::fee_registry_light::FeeRegistryLight;
 use super::data_transfer_object::full_for_account::FullForAccount;
 use super::data_transfer_object::full::Full;
 use super::data_transfer_object::fund::Fund as FundDto;
+use super::data_transfer_object::fungible_token_metadata::FungibleTokenMetadata as FungibleTokenMetadataDto;
 use super::data_transfer_object::investor_investment::InvestorInvestment as InvestorInvestmentDto;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
@@ -61,7 +62,7 @@ impl StakePool {
 
     #[init]
     pub fn new(
-        fungible_token_metadata: FungibleTokenMetadata,
+        fungible_token_metadata: FungibleTokenMetadataDto,
         manager_id: Option<AccountId>,
         self_fee_receiver_account_id: AccountId,
         partner_fee_receiver_account_id: AccountId,
@@ -297,7 +298,7 @@ impl FungibleTokenCore for StakePool {
 
 impl StakePool {
     fn internal_new(
-        fungible_token_metadata: FungibleTokenMetadata,
+        fungible_token_metadata: FungibleTokenMetadataDto,
         manager_id: Option<AccountId>,
         self_fee_receiver_account_id: AccountId,
         partner_fee_receiver_account_id: AccountId,
@@ -310,7 +311,16 @@ impl StakePool {
             env::panic_str("Contract state is already initialize.");
         }
 
-        fungible_token_metadata.assert_valid();
+        let fungible_token_metadata_ = FungibleTokenMetadata {
+            spec: FT_METADATA_SPEC.to_string(),
+            name: fungible_token_metadata.name,
+            symbol: fungible_token_metadata.symbol,
+            icon: fungible_token_metadata.icon,
+            reference: fungible_token_metadata.reference,
+            reference_hash: fungible_token_metadata.reference_hash,
+            decimals: fungible_token_metadata.decimals
+        };
+            fungible_token_metadata_.assert_valid();
 
         if self_fee_receiver_account_id == partner_fee_receiver_account_id {
             env::panic_str("The self fee receiver account and partner fee receiver account can not be the same.");
@@ -374,7 +384,7 @@ impl StakePool {
                 reward_fee,
                 instant_withdraw_fee
             },
-            fungible_token: FungibleToken::new(fungible_token_metadata),
+            fungible_token: FungibleToken::new(fungible_token_metadata_),
             fund: Fund::new(),
             validating: Validating::new(),
             current_epoch_height: env::epoch_height(),
