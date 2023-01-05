@@ -6,7 +6,7 @@ use super::storage_key::StorageKey;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct InvestorInvestment {
     pub distribution_registry: LookupMap<AccountId, Balance>,
-    pub distributions_quantity: u64,      // TODO Нужно ли.
+    pub distributions_quantity: u64,
     pub staked_balance: Balance
 }
 

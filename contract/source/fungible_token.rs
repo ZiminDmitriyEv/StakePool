@@ -7,19 +7,17 @@ use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct FungibleToken {
-    pub owner_id: AccountId,        // TODO Нужен ли?
     pub total_supply: Balance,
     pub account_registry: LookupMap<AccountId, Balance>,
     pub accounts_quantity: u64,
     pub metadata: LazyOption<FungibleTokenMetadata>,
-        /// In bytes.
+    /// In bytes.
     pub storage_usage_per_account: StorageUsage,
 }
 
 impl FungibleToken {
-    pub fn new(owner_id: AccountId, fungible_token_metadata: FungibleTokenMetadata) -> Self {
+    pub fn new(fungible_token_metadata: FungibleTokenMetadata) -> Self {
         Self {
-            owner_id,
             total_supply: 0,
             account_registry: Self::initialize_account_registry(),
             accounts_quantity: 0,

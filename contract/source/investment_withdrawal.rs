@@ -6,5 +6,5 @@ pub struct InvestmentWithdrawal {
     /// Near balance that the user requested to withdraw.
     pub near_amount: Balance,
     /// Id of account who spent funds on storage staking for this structure.
-    pub account_id: AccountId   // TODO проверить, что этому аккаунту возвращаютсяс средства.
+    pub account_id: AccountId
 }

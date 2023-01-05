@@ -10,7 +10,7 @@ pub struct Fund {
     pub classic_liquidity_balance: Balance,
     pub investment_staked_balance: Balance,
     pub delayed_withdrawn_fund: DelayedWithdrawnFund,
-    pub is_distributed_on_validators_in_current_epoch: bool         // TODO вынести в ВспомогательныеПараметры такой и подобные параметры или просто переназвать
+    pub is_distributed_on_validators_in_current_epoch: bool
 }
 
 impl Fund {

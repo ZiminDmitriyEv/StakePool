@@ -5,7 +5,7 @@ use super::fee::Fee;
 
 #[derive(Clone, BorshDeserialize, BorshSerialize, Serialize, Deserialize)]
 #[serde(crate = "near_sdk::serde")]
-pub struct SharedFee {                                          // СДелать изменения Фии через некоторое количество эпох
+pub struct SharedFee {
     pub self_fee: Fee,
     pub partner_fee: Option<Fee>
 }

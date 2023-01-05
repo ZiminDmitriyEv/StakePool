@@ -44,12 +44,12 @@ construct_uint! {
 }
 
 #[near_bindgen]
-#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]     // TODO проверить все типы данных. LazyOption, например, добавить там, где Мэпы и сеты, посмотреть, где нужно !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!1
+#[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
 pub struct StakePool {
     account_registry: AccountRegistry,
     fungible_token: FungibleToken,
     fund: Fund,
-    fee_registry: FeeRegistry,                          // TODO сделать через Next epoch.
+    fee_registry: FeeRegistry,
     validating: Validating,
     current_epoch_height: EpochHeight,
     reward: Reward
@@ -69,7 +69,7 @@ impl StakePool {
         reward_fee_partner: Option<Fee>,
         instant_withdraw_fee_self: Option<Fee>,
         instant_withdraw_fee_partner: Option<Fee>
-    ) -> Self {                                          // TODO Сюда заходит дипозит. Как его отсечь, то есть, взять ту часть, к
+    ) -> Self {
         Self::internal_new(
             fungible_token_metadata,
             manager_id,
@@ -305,7 +305,7 @@ impl StakePool {
         reward_fee_partner: Option<Fee>,
         instant_withdraw_fee_self: Option<Fee>,
         instant_withdraw_fee_partner: Option<Fee>
-    ) -> Self {                                     // TODO Посмотреть, сколько нужно для хранения всего стейта ниже. Остальной депозит пололожить в качестве стейка.
+    ) -> Self {
         if env::state_exists() {
             env::panic_str("Contract state is already initialize.");
         }
@@ -365,7 +365,7 @@ impl StakePool {
 
         let mut stake_pool = Self {
             account_registry: AccountRegistry {
-                owner_id: predecessor_account_id.clone(),
+                owner_id: predecessor_account_id,
                 manager_id: manager_id_,
                 self_fee_receiver_account_id,
                 partner_fee_receiver_account_id
@@ -374,7 +374,7 @@ impl StakePool {
                 reward_fee,
                 instant_withdraw_fee
             },
-            fungible_token: FungibleToken::new(predecessor_account_id, fungible_token_metadata),
+            fungible_token: FungibleToken::new(fungible_token_metadata),
             fund: Fund::new(),
             validating: Validating::new(),
             current_epoch_height: env::epoch_height(),
@@ -442,7 +442,6 @@ impl StakePool {
                                     PromiseOrValue::Promise(
                                         validator::ext(preffered_validator_account_id.clone())
                                             .with_attached_deposit(near_amount)
-                                            // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                             .deposit_and_stake()
                                             .then(
                                                 Self::ext(env::current_account_id())
@@ -589,7 +588,6 @@ impl StakePool {
             StakingContractVersion::Classic => {
                 validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
-                    // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                     .deposit_and_stake()
                     .then(
                         Self::ext(env::current_account_id())
@@ -665,7 +663,7 @@ impl StakePool {
             }
         }
 
-        let mut near_amount = self.convert_token_amount_to_near_amount(token_amount);      // TODO  TODO  TODO  TODO  TODO  Может, конвертацию везде нужно считать на коллбеке в контексте лостАпдейта? братить внимание, что условия на проверку на ноль после конвертации уже ставиь не нужно, если решен вопрос с конвертацией.
+        let mut near_amount = self.convert_token_amount_to_near_amount(token_amount);
 
         if near_amount == 0 {
             env::panic_str("Insufficient token amount.");
@@ -1010,7 +1008,7 @@ impl StakePool {
             env::panic_str("Insufficient near amount.");
         }
 
-        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {  // TODO TODO TODO TODO TODO очень важно делать правильную математику конвертации. То есть, количество токенов округляем в меньшую сторону при конвертации, а количество неаров - в большую. Вообще, нужно, чтобы прямой-обратный перевод работали правильно.
+        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
             Some(token_balance_) => token_balance_,
             None => {
                 env::panic_str("Token account is not registered.");
@@ -1191,7 +1189,7 @@ impl StakePool {
             .transfer(near_amount)
     }
 
-    fn internal_increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: Balance) -> Promise {      // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+    fn internal_increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: Balance) -> Promise {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
@@ -1206,7 +1204,7 @@ impl StakePool {
         }
 
         match self.validating.validator_registry.get(&validator_account_id) {
-            Some(validator) => {                                                                       // TODO написать все везде в одном стиле let vi = match ... То есть, убрать вложенность там, где возможно
+            Some(validator) => {
                 if validator.is_only_for_investment {
                     env::panic_str("Validator is used only for investment purpose.");
                 }
@@ -1215,7 +1213,6 @@ impl StakePool {
                     StakingContractVersion::Classic => {
                         validator::ext(validator_account_id.clone())
                             .with_attached_deposit(near_amount)
-                            // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                             .deposit_and_stake()
                             .then(
                                 Self::ext(env::current_account_id())
@@ -1247,7 +1244,7 @@ impl StakePool {
             env::panic_str("Insufficient near amount.");
         }
 
-        let validator = match self.validating.validator_registry.get(&validator_account_id) {     // TODO проверить на правильные ли методы идут кроссколы. Взять весб баланс или взять анстейкед баланс или взять стейкед баланс.
+        let validator = match self.validating.validator_registry.get(&validator_account_id) {
             Some(validator_) => validator_,
             None => {
                 env::panic_str("Validator account is not registered yet.");
@@ -1285,7 +1282,6 @@ impl StakePool {
         match validator.staking_contract_version {
             StakingContractVersion::Classic => {
                 validator::ext(validator_account_id.clone())
-                    // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                     .unstake(near_amount.into())
                     .then(
                         Self::ext(env::current_account_id())
@@ -1311,19 +1307,18 @@ impl StakePool {
             env::panic_str("Epoch is not intended for a take unstaked balance.");
         }
 
-        match self.validating.validator_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
+        match self.validating.validator_registry.get(&validator_account_id) {
             Some(validator) => {
                 if validator.unstaked_balance == 0 {
                     env::panic_str("Insufficient unstaked balance on validator.");
                 }
-                if validator.last_update_epoch_height >= current_epoch_height {       // TODO нужно ли это услвоие
+                if validator.last_update_epoch_height >= current_epoch_height {
                     env::panic_str("Validator is already updated.");
                 }
 
                 match validator.staking_contract_version {
                     StakingContractVersion::Classic => {
                         validator::ext(validator_account_id.clone())
-                            // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                             .withdraw(validator.unstaked_balance.into())
                             .then(
                                 Self::ext(env::current_account_id())
@@ -1338,12 +1333,12 @@ impl StakePool {
         }
     }
 
-    fn internal_update_validator(&mut self, validator_account_id: AccountId) -> Promise {     // TODO TODO TODO Что делать, если в новой эпохе часть обновилась, и уже еще раз наступила новая эпоха, и теперь то, что осталось, обновились. То есть, рассинхронизация состояния.   // TODO Сюда нужно зафиксировать максимальное число Газа. Возможно ли?
+    fn internal_update_validator(&mut self, validator_account_id: AccountId) -> Promise {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_desynchronized();
         self.assert_authorized_management_only_by_manager();
 
-        match self.validating.validator_registry.get(&validator_account_id) {   // TODO // TODO ЧТо будет, если валидатор перестал работать, что придет с контракта. Не прервется ли из-за этго цепочка выполнения апдейтов
+        match self.validating.validator_registry.get(&validator_account_id) {
             Some(validator) => {
                 let current_epoch_height = env::epoch_height();
 
@@ -1351,7 +1346,6 @@ impl StakePool {
                     match validator.staking_contract_version {
                         StakingContractVersion::Classic => {
                             validator::ext(validator_account_id.clone())
-                                // .with_static_gas(deposit_and_stake_gas)                  // CCX выполняется, если прикрепить меньше, чем нужно, но выпролняться не должен.
                                 .get_account_total_balance(env::current_account_id())
                                 .then(
                                     Self::ext(env::current_account_id())
@@ -1445,7 +1439,7 @@ impl StakePool {
         staking_contract_version: StakingContractVersion,
         is_only_for_investment: bool,
         is_preferred: bool
-    ) -> PromiseOrValue<()> {                                                     // TODO можно ли проверить, что адрес валиден, и валидатор в вайт-листе?
+    ) -> PromiseOrValue<()> {
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
@@ -1484,7 +1478,7 @@ impl StakePool {
         PromiseOrValue::Value(())
     }
 
-    fn internal_remove_validator(&mut self, validator_account_id: AccountId) -> Promise {       // TODO На всякий слуяай проверять, есть ли на валидаторе средстыва пула через кроссколл.
+    fn internal_remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
         Self::assert_gas_is_enough();
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
@@ -1497,7 +1491,7 @@ impl StakePool {
         };
         if validator.classic_staked_balance > 0
             || validator.investment_staked_balance > 0
-            || validator.unstaked_balance > 0 {       // TODO  TODO TODO TODO TODO подумать, при каких условиях еще невозможно удалить валидатор.
+            || validator.unstaked_balance > 0 {
             env::panic_str("Validator has an available balance.");
         }
 
@@ -1616,7 +1610,7 @@ impl StakePool {
         self.assert_epoch_is_synchronized();
         self.assert_authorized_management_only_by_manager();
 
-        let investor_investment = match self.validating.investor_investment_registry.remove(&investor_account_id) {  // TODO TODO TODO TODO TODO Обратить внимание, что на постоянное количество инвестмент токенов приходится увеличивающееся количество неара, но инвестмент баланс зафиксирован.
+        let investor_investment = match self.validating.investor_investment_registry.remove(&investor_account_id) {
             Some(investor_investment_) => investor_investment_,
             None => {
                 env::panic_str("Investor account is not registered yet.");
@@ -1745,7 +1739,7 @@ impl StakePool {
 
         if predecessor_account_token_balance > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
-            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {                                           // TODO стоит ли записать здесь и везде два последних условия через метод
+            || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
             self.fungible_token.account_registry.insert(&predecessor_account_id, &predecessor_account_token_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
@@ -2138,18 +2132,18 @@ impl StakePool {
         (
             U256::from(near_amount)
             * U256::from(self.fungible_token.total_supply)
-            / U256::from(common_balance)             // TODO Проверить Округление
+            / U256::from(common_balance)
         ).as_u128()
     }
 
-    fn convert_token_amount_to_near_amount(&self, token_amount: Balance) -> Balance {      // TOD вот здесь обратить внимание. Правильно ли стоит проверка в случае, если здесь ноль, а неаров не ноль. ТАкое может быть в контексте получения и вывда ревардов
+    fn convert_token_amount_to_near_amount(&self, token_amount: Balance) -> Balance {
         if self.fungible_token.total_supply == 0 || token_amount == 0 {
             return token_amount
         }
 
         (
             U256::from(token_amount)
-            * U256::from(self.fund.get_common_balance())             // TODO Проверить Округление
+            * U256::from(self.fund.get_common_balance())
             / U256::from(self.fungible_token.total_supply)
         ).as_u128()
     }
@@ -2193,7 +2187,7 @@ impl StakePool {
         }
     }
 
-    fn assert_gas_is_enough() {        // TODO проссчитать Количество Газа для каждого метода и вставить сюда в сигнатуру.
+    fn assert_gas_is_enough() {
         if env::prepaid_gas() < (Gas::ONE_TERA * MAXIMUM_NUMBER_OF_TGAS) {
             env::panic_str("Not enough Gas quantity.");
         }
@@ -2433,7 +2427,7 @@ impl StakePool {
         current_epoch_height: EpochHeight
     ) -> bool {
         if env::promise_results_count() == 0 {
-            env::panic_str("Contract expected a result on the callback.");        // TODO Фраза повторяется. Нужно ли выновсить в константу?
+            env::panic_str("Contract expected a result on the callback.");
         }
 
         match env::promise_result(0) {
@@ -2460,7 +2454,7 @@ impl StakePool {
     }
 
     #[private]
-    pub fn requested_decrease_validator_stake_callback(    // TODO TODO TODO Это дикриз для нужнд пользоватпеля, но подойдет ли этот метод, если мы хотим просто сделать дикриз стейка валидатора, с целью перераспределения. Обратить внимание на то, что то, что в ДелайдВитхдровол уже не влияет на курс. TODO TODO TODO написать метод, который снимает для нужд менеджера, при этом дать возможность пользователяи продолжать делать ДелайдАнстейк, даже если мы для нужнд менеджера запросили все средства.!!!!!!!!    // TODO TODO проверить, что во всех методах, где есть коллбек, нет изменения состояния вне коллбека
+    pub fn requested_decrease_validator_stake_callback(
         &mut self,
         validator_account_id: AccountId,
         near_amount: Balance,
@@ -2526,7 +2520,7 @@ impl StakePool {
     }
 
     #[private]
-    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> CallbackResult {  // TODO Может быть, ставить счетчик на количество валиаторов, с которыз нужно снимать стейк, чтобы проверять.
+    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> CallbackResult {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -2559,7 +2553,6 @@ impl StakePool {
         }
     }
 
-    // TODO комментарий написать. Возвращаем и сохраняем епохи в разном состоянии по-разному, чтобы запомнить, что в какой эпохе инициировано по фактту, а в какую выполнен коллбек
     #[private]
     pub fn update_validator_callback(
         &mut self,
@@ -2610,85 +2603,3 @@ impl StakePool {
         }
     }
 }
-
-// TODO Понять работу с аккаунтами. КОму пренадлжат, кто может мзенять состояние, и подобные вещи
-
-// #[ext_contract(ext_voting)]           что это такое???????????????????????????????????????????????
-// pub trait VoteContract {
-//     /// Method for validators to vote or withdraw the vote.
-//     /// Votes for if `is_vote` is true, or withdraws the vote if `is_vote` is false.
-//     fn vote(&mut self, is_vote: bool);
-// }
-
-
-//#[global_allocator]
-// static ALLOC: near_sdk::wee_alloc::WeeAlloc = near_sdk::wee_alloc::WeeAlloc::INIT;            Нужно ли вот это ??????????????????
-// near_sdk::setup_alloc!();
-
-
-
-// TODO IMPORTANT!!!!!!!!!!!!!!!!!!!!!!!
-// WhiteList
-// Managment Secuirity
-// Multisig key
-// Container deploying
-// Mint authority checking
-
-
-// TODO пройтись по именам полей. Валидатор - это стекинг, а не сам валидаьор, например
-
-// TODO CLIPPY
-// TODO ПАоменять стиль матчинга
-
-// TODO NOTE: stake pool Guarantees are based on the no-slashing condition. Once slashing is introduced, the contract will no longer
-// provide some guarantees. Read more about slashing in [Nightshade paper](https://near.ai/nightshade).
-
-
-// TODO TODO TODO TODO TODO Важно запрашивать необходимое количество газа, чтобы хватило на  контракт + кроссколл + коллбек. Иначе что-то выполнится, а что-то нет.
-
-// TODO C Валидатора, по идее, придет немного больше неар, чем запрошено по методам, так как мы ожидаем запрос на Анстейк 4 эпохи, в это время количество отдаваемого зафиксировано, но оно еще приносит прибыль (затем еще 4 эпохи, чтобы забрать), что с этим делать?
-
-// TODO В каждом методе проверить, что все, что взято из хранилища, в него и положено. (get, insert.) .
-// TODO проверить, что взятые из хранилища параметры изменяются там, где это требуется.
-
-// TODO проверить, нет ли такого, чтобы пользователб мог что-то сделать за другого пользователя. То есть. АккаунтАйди передается в сигнатуру, а не берется ПредецессорАккаунтАйди
-
-
-// TODO TODO TODO TODO TODO Можно ли будет перейти на МУЛЬТИСИГ флоу управления после деплоя классического флоу управления.
-
-// проверить, что у каждого свойства структуры есть инкремент и дикремент.
-
-
-// https://nomicon.io/Standards  Евенты и подобное.
-
-// // use near_contract_standards::fungible_token::core::FungibleTokenCore;
-// use near_contract_standards::fungible_token::events  - посмотреть, какие нужны
-// use near_contract_standards::fungible_token::resolver::FungibleTokenResolver;
-// https://learn.figment.io/tutorials/stake-fungible-token
-
-
-// НАписать DecreaseValidatorStake относительно менеджера, причем это не должно влиять на возможность снятия средств пользователями.
-
-
-// Проверить, что Методы для кросскола, правильно интегрированы в логику, то есть, где get_account_total_balance/get_account_staked_balance. Проверить все методы.!!!!!!!1
-
-// Документация
-
-// НУжно ли добавить метод рестейк внутрь пула для каждого валидатора?
-
-//  сделать курс через добавочный фонд
-
-
-// Анстейкед Баланс на структуре валидатора и контракте не сходится. Проверить на новом контракте, почему так.
-
-
-
-// pool30 задеплоить.
-
-
-// измененяи михаила
-
-
-// internal_delayed_withdraw_from_validator  проверить, что нельзя перезапросить с валидатора больше, чем есть на самом деле.
-
-// FungibleTokenMetadataProvider

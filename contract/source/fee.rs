@@ -23,7 +23,7 @@ impl Fee {
         }
     }
 
-    pub fn multiply(&self, value: Balance) -> Balance {         // TODO нужно ли сделать безопасно? Что здесь по огругению
+    pub fn multiply(&self, value: Balance) -> Balance {
         (
             U256::from(self.numerator) * U256::from(value)
             / U256::from(self.denominator)

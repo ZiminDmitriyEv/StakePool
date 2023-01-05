@@ -3,16 +3,16 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap, LookupMap};
 use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
+use super::staking_contract_version::StakingContractVersion;
 use super::storage_key::StorageKey;
 use super::validator::Validator;
-use super::staking_contract_version::StakingContractVersion;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Validating {
     pub validator_registry: UnorderedMap<AccountId, Validator>,
     /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
-    pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,                 // TODO переместить в отдельный модуль?.
-    pub validators_quantity: u64,                                       // TODO TODO TODO TODO TODO УБРАТЬ, ТАК КАК МОЖНО ВЗЯТЬ ИЗ АНОРДРЕД МЭп
+    pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,
+    pub validators_quantity: u64,
     pub preffered_validator: Option<AccountId>,
     pub quantity_of_validators_updated_in_current_epoch: u64,
     /// In bytes.
@@ -37,7 +37,7 @@ impl Validating {
         }
     }
 
-    fn calculate_storage_usage_per_additional_validator() -> StorageUsage {      // TODO СТоит ли сделать одинаковые методы через дженерик или макрос?
+    fn calculate_storage_usage_per_additional_validator() -> StorageUsage {
         let mut validator_registry = Self::initialize_validator_registry();
 
         let initial_storage_usage = env::storage_usage();
@@ -56,7 +56,7 @@ impl Validating {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));           // TODO эту строку через функцию
+        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
 
         investor_registry.insert(&account_id, &InvestorInvestment::new(account_id.clone()));
 
