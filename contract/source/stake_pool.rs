@@ -1760,45 +1760,50 @@ impl StakePool {
         let mut refundable_near_amount = env::attached_deposit();
 
         let predecessor_account_id = env::predecessor_account_id();
-        let mut predecessor_account_token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance) => token_balance,
+        let mut predecessor_account_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(account_balance) => account_balance,
             None => {
                 env::panic_str("Token account is not registered yet.");
             }
         };
 
-        let mut receiver_account_token_balance = match self.fungible_token.account_registry.get(&receiver_account_id) {
-            Some(token_balance) => token_balance,
+        let mut receiver_account_balance = match self.fungible_token.account_registry.get(&receiver_account_id) {
+            Some(account_balance) => account_balance,
             None => {
                 env::panic_str("Token account is not registered yet.");
             }
         };
 
-        if predecessor_account_token_balance < token_amount {
+        if predecessor_account_balance.token_amount < token_amount {
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
-        predecessor_account_token_balance -= token_amount;
+        predecessor_account_balance.token_amount -= token_amount;
 
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(predecessor_account_token_balance) < investor_investment.staked_balance {
+            if (
+                self.convert_token_amount_to_near_amount(predecessor_account_balance.token_amount)
+                + predecessor_account_balance.investment_near_amount
+            ) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to transfer token amount.");
             }
         }
 
-        receiver_account_token_balance += token_amount;
+        receiver_account_balance.token_amount += token_amount;
 
-        if predecessor_account_token_balance > 0
+        if predecessor_account_balance.token_amount > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
-            self.fungible_token.account_registry.insert(&predecessor_account_id, &predecessor_account_token_balance);
+            self.fungible_token.account_registry.insert(&predecessor_account_id, &predecessor_account_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
+            receiver_account_balance.classic_near_amount + predecessor_account_balance.classic_near_amount;
+
             refundable_near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
         }
-        self.fungible_token.account_registry.insert(&receiver_account_id, &receiver_account_token_balance);
+        self.fungible_token.account_registry.insert(&receiver_account_id, &receiver_account_balance);
 
         Promise::new(predecessor_account_id)
             .transfer(refundable_near_amount)
