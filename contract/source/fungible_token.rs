@@ -38,7 +38,8 @@ impl FungibleToken {
             &account_id,
             &AccountBalance {
                 token_amount: 0,
-                near_amount: 0
+                classic_near_amount: 0,
+                investment_near_amount: 0
             }
         );
 

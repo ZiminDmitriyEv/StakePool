@@ -376,7 +376,8 @@ impl StakePool {
 
         let account_balance = AccountBalance {
             token_amount: 0,
-            near_amount: 0
+            classic_near_amount: 0,
+            investment_near_amount: 0
         };
 
         let mut stake_pool = Self {
@@ -420,7 +421,7 @@ impl StakePool {
             None => {
                 (
                     Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account),
-                    AccountBalance { token_amount: 0, near_amount: 0 }
+                    AccountBalance { token_amount: 0, classic_near_amount: 0, investment_near_amount: 0 }
                 )
             }
         };
@@ -494,7 +495,7 @@ impl StakePool {
             self.fungible_token.total_supply += token_amount;
 
             account_balance.token_amount += token_amount;
-            account_balance.near_amount += near_remainder;
+            account_balance.classic_near_amount += near_remainder;
             if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance) {
                 self.fungible_token.accounts_quantity += 1;
             }
@@ -640,21 +641,21 @@ impl StakePool {
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance_) => token_balance_,
+        let mut account_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(account_balance_) => account_balance_,
             None => {
                 env::panic_str("Token account is not registered.");
             }
         };
-        if token_balance < token_amount {
+        if account_balance.token_amount < token_amount {
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
-        let token_balance_log = token_balance;
+        let token_balance_log = account_balance.token_amount;
 
-        token_balance -= token_amount;
+        account_balance.token_amount -= token_amount;
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment.staked_balance {
+            if (self.convert_token_amount_to_near_amount(account_balance.token_amount) + account_balance.investment_near_amount) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to instant withdraw token amount.");
             }
         }
@@ -685,51 +686,50 @@ impl StakePool {
             }
         }
 
-        let mut near_amount = self.convert_token_amount_to_near_amount(token_amount);
+        let mut near_amount = self.convert_token_amount_to_near_amount(token_amount) + account_balance.classic_near_amount;
 
         if near_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
-
         if near_amount > self.fund.classic_unstaked_balance {
             env::panic_str("Token amount exceeded the available unstaked near balance.");
         }
 
+        account_balance.classic_near_amount = 0;
+
         self.fund.classic_unstaked_balance -= near_amount;
 
         if predecessor_account_id == self.account_registry.self_fee_receiver_account_id {
-            token_balance += instant_withdraw_fee_self_token_amount;
+            account_balance.token_amount += instant_withdraw_fee_self_token_amount;
         } else {
-            match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
-                Some(mut token_balance_) => {
-                    token_balance_ += instant_withdraw_fee_self_token_amount;
-
-                    self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance_);
-                }
+            let mut account_balance_ = match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
+                Some(mut account_balance__) => account_balance__,
                 None => {
                     env::panic_str("Nonexecutable code. Object must exist.");
                 }
-            }
+            };
+            account_balance_.token_amount += instant_withdraw_fee_self_token_amount;
+
+            self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &account_balance_);
         }
         if predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
-            token_balance += instant_withdraw_fee_partner_token_amount
+            account_balance.token_amount += instant_withdraw_fee_partner_token_amount
         } else {
-            match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
-                Some(mut token_balance_) => {
-                    token_balance_ += instant_withdraw_fee_partner_token_amount;
-
-                    self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance_);
-                }
+            let mut account_balance_ = match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
+                Some(mut account_balance__) => account_balance__,
                 None => {
                     env::panic_str("Nonexecutable code. Object must exist.");
                 }
-            }
+            };
+            account_balance_.token_amount += instant_withdraw_fee_partner_token_amount;
+
+            self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &account_balance_);
         }
 
-        let released_storage_staking_price_per_additional_account_log = if token_balance > 0
+        let released_storage_staking_price_per_additional_account_log = if account_balance.token_amount > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id {
-            self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+            self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
 
             0
         } else {
@@ -783,7 +783,7 @@ impl StakePool {
                 &predecessor_account_id,
                 token_amount,
                 &predecessor_account_id,
-                token_balance,
+                account_balance.token_amount,
                 &current_account_id_log,
                 self.fund.get_common_balance(),
                 &current_account_id_log,
@@ -2273,11 +2273,11 @@ impl StakePool {
             None => {
                 self.fungible_token.accounts_quantity += 1;
 
-                AccountBalance {token_amount: 0, near_amount: 0}
+                AccountBalance {token_amount: 0, classic_near_amount: 0, investment_near_amount: 0}
             }
         };
         account_balance.token_amount += token_amount;
-        account_balance.near_amount += near_remainder;
+        account_balance.classic_near_amount += near_remainder;
         self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
         self.fungible_token.total_supply += token_amount;
 
@@ -2379,11 +2379,11 @@ impl StakePool {
                     None => {
                         self.fungible_token.accounts_quantity += 1;
 
-                        AccountBalance { token_amount: 0, near_amount: 0 }
+                        AccountBalance { token_amount: 0, classic_near_amount: 0, investment_near_amount: 0}
                     }
                 };
                 account_balance.token_amount += token_amount;
-                account_balance.near_amount += near_remainder;
+                account_balance.classic_near_amount += near_remainder;
                 self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
                 self.fungible_token.total_supply += token_amount;
 
