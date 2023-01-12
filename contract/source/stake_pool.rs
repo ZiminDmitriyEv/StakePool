@@ -1439,7 +1439,7 @@ impl StakePool {
             self.validating.quantity_of_validators_updated_in_current_epoch = 0;
             self.reward.total_rewards_from_validators_near_amount += self.reward.previous_epoch_rewards_from_validators_near_amount;
 
-            let previous_epoch_rewards_from_validators_token_amount = self.convert_near_amount_to_token_amount(
+            let (previous_epoch_rewards_from_validators_token_amount, _) = self.convert_near_amount_to_token_amount(
                 self.reward.previous_epoch_rewards_from_validators_near_amount
             );
 
@@ -1453,29 +1453,27 @@ impl StakePool {
                         if reward_fee_partner_token_amount != 0 {
                             reward_fee_self_token_amount -= reward_fee_partner_token_amount;
 
-                            match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
-                                Some(mut token_balance) => {
-                                    token_balance += reward_fee_partner_token_amount;
-
-                                    self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &token_balance);
-                                }
+                            let mut account_balance = match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
+                                Some(account_balance_) => account_balance_,
                                 None => {
                                     env::panic_str("Nonexecutable code. Object must exist.");
                                 }
-                            }
+                            };
+                            account_balance.token_amount += reward_fee_partner_token_amount;
+
+                            self.fungible_token.account_registry.insert(&self.account_registry.partner_fee_receiver_account_id, &account_balance);
                         }
                     }
 
-                    match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
-                        Some(mut token_balance) => {
-                            token_balance += reward_fee_self_token_amount;
-
-                            self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &token_balance);
-                        }
+                    let mut account_balance = match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
+                        Some(account_balance_) => account_balance_,
                         None => {
                             env::panic_str("Nonexecutable code. Object must exist.");
                         }
-                    }
+                    };
+                    account_balance.token_amount += reward_fee_self_token_amount;
+
+                    self.fungible_token.account_registry.insert(&self.account_registry.self_fee_receiver_account_id, &account_balance);
                 }
             }
 
