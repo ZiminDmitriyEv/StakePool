@@ -960,6 +960,36 @@ impl StakePool {
     }
 
     fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
+
+
+        // ЧТо здесь делать с near_remainder
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
@@ -1003,8 +1033,7 @@ impl StakePool {
             mut refundable_near_amount,
             mut investment_withdrawal,
             mut reserved_storage_staking_price_per_additional_accounts_log
-        ) =
-            match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
+        ) = match self.fund.delayed_withdrawn_fund.investment_withdrawal_registry.get(&validator_account_id) {
             Some(investment_withdrawal_) => (attached_deposit, investment_withdrawal_, 0),
             None => {
                 let storage_staking_price_per_additional_investment_withdrawal =
@@ -1027,18 +1056,18 @@ impl StakePool {
             env::panic_str("Near amount exceeded the available near balance on validator.");
         }
 
-        let token_amount = self.convert_near_amount_to_token_amount(near_amount);
+        let (token_amount, near_remainder) = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
             env::panic_str("Insufficient near amount.");
         }
 
-        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance_) => token_balance_,
+        let mut account_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(account_balance_) => account_balance_,
             None => {
                 env::panic_str("Token account is not registered.");
             }
         };
-        if token_balance < token_amount {
+        if account_balance.token_amount < token_amount {
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
@@ -1104,11 +1133,11 @@ impl StakePool {
         investor_investment.staked_balance -= near_amount;
         self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment);
 
-        token_balance -= token_amount;
-        if token_balance > 0
+        account_balance.token_amount -= token_amount;
+        if account_balance.token_amount > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
-            self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+            self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
         } else {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
@@ -1164,11 +1193,11 @@ impl StakePool {
                 &current_account_id_log,
                 self.fund.get_common_balance() + near_amount,
                 &predecessor_account_id,
-                token_balance + token_amount,
+                account_balance.token_amount + token_amount,
                 &predecessor_account_id,
                 token_amount,
                 &predecessor_account_id,
-                token_balance,
+                account_balance.token_amount,
                 &current_account_id_log,
                 self.fund.get_common_balance(),
                 &current_account_id_log,
