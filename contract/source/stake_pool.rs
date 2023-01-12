@@ -7,7 +7,7 @@ use near_sdk::json_types::U128;
 use super::account_balance::AccountBalance;
 use super::account_registry::AccountRegistry;
 use super::cross_contract_call::validator::validator;
-use super::data_transfer_object::account_balance::AccountBalance;
+use super::data_transfer_object::account_balance::AccountBalance as AccountBalanceDto;
 use super::data_transfer_object::aggregated::Aggregated;
 use super::data_transfer_object::base_account_balance::BaseAccountBalance;
 use super::data_transfer_object::callback_result::CallbackResult;
@@ -201,7 +201,7 @@ impl StakePool {
         self.internal_get_delayed_withdrawal_details(account_id)
     }
 
-    pub fn get_account_balance(&self, account_id: AccountId) -> AccountBalance {
+    pub fn get_account_balance(&self, account_id: AccountId) -> AccountBalanceDto {
         self.internal_get_account_balance(account_id)
     }
 
@@ -415,10 +415,13 @@ impl StakePool {
 
         let attached_deposit = env::attached_deposit();
 
-        let (storage_staking_price_per_additional_account, mut token_balance) = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance_) => (0, token_balance_),
+        let (storage_staking_price_per_additional_account, mut account_balance) = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(account_balance_) => (0, account_balance_),
             None => {
-                (Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account), 0)
+                (
+                    Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account),
+                    AccountBalance { token_amount: 0, near_amount: 0 }
+                )
             }
         };
 
@@ -443,7 +446,7 @@ impl StakePool {
 
         let refundable_near_amount = available_for_staking_near_amount - near_amount;
 
-        let token_amount = self.convert_near_amount_to_token_amount(near_amount);
+        let (token_amount, near_remainder) = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
             env::panic_str("Insufficient near amount.");
         }
@@ -468,6 +471,7 @@ impl StakePool {
                                                         near_amount,
                                                         refundable_near_amount,
                                                         token_amount,
+                                                        near_remainder,
                                                         self.current_epoch_height,
                                                         storage_staking_price_per_additional_account
                                                     )
@@ -489,8 +493,9 @@ impl StakePool {
             self.fund.classic_unstaked_balance += near_amount;
             self.fungible_token.total_supply += token_amount;
 
-            token_balance += token_amount;
-            if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance) {
+            account_balance.token_amount += token_amount;
+            account_balance.near_amount += near_remainder;
+            if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance) {
                 self.fungible_token.accounts_quantity += 1;
             }
 
@@ -527,11 +532,11 @@ impl StakePool {
                     &current_account_id_log,
                     self.fund.get_common_balance() - near_amount,
                     &predecessor_account_id,
-                    token_balance - token_amount,
+                    account_balance.token_amount - token_amount,
                     &predecessor_account_id,
                     token_amount,
                     &predecessor_account_id,
-                    token_balance,
+                    account_balance.token_amount,
                     &current_account_id_log,
                     self.fund.get_common_balance(),
                     &current_account_id_log,
@@ -1879,7 +1884,7 @@ impl StakePool {
         }
     }
 
-    fn internal_get_account_balance(&self, account_id: AccountId) -> AccountBalance {
+    fn internal_get_account_balance(&self, account_id: AccountId) -> AccountBalanceDto {
         match self.fungible_token.account_registry.get(&account_id) {
             Some(token_balance) => {
                 let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
@@ -1890,7 +1895,7 @@ impl StakePool {
                             env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
                         }
 
-                        AccountBalance {
+                        AccountBalanceDto {
                             base_account_balance: Some(
                                 BaseAccountBalance {
                                     token_balance: token_balance.into(),
@@ -1902,7 +1907,7 @@ impl StakePool {
                         }
                     }
                     None => {
-                        AccountBalance {
+                        AccountBalanceDto {
                             base_account_balance: Some(
                                 BaseAccountBalance {
                                     token_balance: token_balance.into(),
@@ -1918,13 +1923,13 @@ impl StakePool {
             None => {
                 match self.validating.investor_investment_registry.get(&account_id) {
                     Some(investor_investment) => {
-                        AccountBalance {
+                        AccountBalanceDto {
                             base_account_balance: None,
                             investment_account_balance: Some(investor_investment.staked_balance.into())
                         }
                     }
                     None => {
-                        AccountBalance {
+                        AccountBalanceDto {
                             base_account_balance: None,
                             investment_account_balance: None
                         }
@@ -2138,18 +2143,19 @@ impl StakePool {
         }
     }
 
-    fn convert_near_amount_to_token_amount(&self, near_amount: Balance) -> Balance {
+    fn convert_near_amount_to_token_amount(&self, near_amount: Balance) -> (Balance, Balance) {
         let common_balance = self.fund.get_common_balance();
 
-        if common_balance == 0 || near_amount == 0 {
-            return near_amount;
+        if common_balance == 0 || near_amount == 0 || self.fungible_token.total_supply == 0 {
+            return (near_amount, 0);
         }
 
+        let numerator = U256::from(near_amount) * U256::from(self.fungible_token.total_supply);
+
         (
-            U256::from(near_amount)
-            * U256::from(self.fungible_token.total_supply)
-            / U256::from(common_balance)
-        ).as_u128()
+            (numerator / U256::from(common_balance)).as_u128(),
+            (numerator % U256::from(common_balance)).as_u128()
+        )
     }
 
     fn convert_token_amount_to_near_amount(&self, token_amount: Balance) -> Balance {
@@ -2234,6 +2240,7 @@ impl StakePool {
         near_amount: Balance,
         refundable_near_amount: Balance,
         token_amount: Balance,
+        near_remainder: Balance,
         current_epoch_height: EpochHeight,
         storage_staking_price_per_additional_account: Balance
     ) {
@@ -2260,16 +2267,17 @@ impl StakePool {
             }
         }
 
-        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance_) => token_balance_,
+        let mut account_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(account_balance_) => account_balance_,
             None => {
                 self.fungible_token.accounts_quantity += 1;
 
-                0
+                AccountBalance {token_amount: 0, near_amount: 0}
             }
         };
-        token_balance += token_amount;
-        self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+        account_balance.token_amount += token_amount;
+        account_balance.near_amount += near_remainder;
+        self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
         self.fungible_token.total_supply += token_amount;
 
         if refundable_near_amount > 0 {
@@ -2306,11 +2314,11 @@ impl StakePool {
                 &current_account_id_log,
                 self.fund.get_common_balance() - near_amount,
                 &predecessor_account_id,
-                token_balance - token_amount,
+                account_balance.token_amount - token_amount,
                 &predecessor_account_id,
                 token_amount,
                 &predecessor_account_id,
-                token_balance,
+                account_balance.token_amount,
                 &current_account_id_log,
                 self.fund.get_common_balance(),
                 &current_account_id_log,
