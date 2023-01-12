@@ -1921,8 +1921,10 @@ impl StakePool {
 
     fn internal_get_account_balance(&self, account_id: AccountId) -> AccountBalanceDto {
         match self.fungible_token.account_registry.get(&account_id) {
-            Some(token_balance) => {
-                let common_near_balance = self.convert_token_amount_to_near_amount(token_balance);
+            Some(account_balance) => {
+                let common_near_balance = self.convert_token_amount_to_near_amount(account_balance.token_amount)
+                    + account_balance.classic_near_amount
+                    + account_balance.investment_near_amount;
 
                 match self.validating.investor_investment_registry.get(&account_id) {
                     Some(investor_investment) => {
@@ -1933,7 +1935,7 @@ impl StakePool {
                         AccountBalanceDto {
                             base_account_balance: Some(
                                 BaseAccountBalance {
-                                    token_balance: token_balance.into(),
+                                    token_balance: account_balance.token_amount.into(),
                                     common_near_balance: common_near_balance.into(),
                                     classic_near_balance: (common_near_balance - investor_investment.staked_balance).into(),
                                 }
@@ -1945,7 +1947,7 @@ impl StakePool {
                         AccountBalanceDto {
                             base_account_balance: Some(
                                 BaseAccountBalance {
-                                    token_balance: token_balance.into(),
+                                    token_balance: account_balance.token_amount.into(),
                                     common_near_balance: common_near_balance.into(),
                                     classic_near_balance: common_near_balance.into(),
                                 }
@@ -2173,7 +2175,7 @@ impl StakePool {
 
     fn internal_ft_balance_of(&self, account_id: AccountId) -> Balance {
         match self.fungible_token.account_registry.get(&account_id) {
-            Some(token_balance) => token_balance,
+            Some(account_balance) => account_balance.token_amount,
             None => 0
         }
     }
