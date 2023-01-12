@@ -806,24 +806,26 @@ impl StakePool {
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-            Some(token_balance_) => token_balance_,
+        let mut account_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+            Some(account_balance_) => account_balance_,
             None => {
                 env::panic_str("Token account is not registered.");
             }
         };
-        if token_balance < token_amount {
+        if account_balance.token_amount < token_amount {
             env::panic_str("Token amount exceeded the available token balance.");
         }
 
-        let near_amount = self.convert_token_amount_to_near_amount(token_amount);
+        let near_amount = self.convert_token_amount_to_near_amount(token_amount) + account_balance.classic_near_amount;
+
         if near_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
-
         if near_amount > self.fund.classic_staked_balance {
             env::panic_str("Token amount exceeded the available staked near balance.");
         }
+
+        account_balance.classic_near_amount = 0;
 
         self.fund.classic_staked_balance -= near_amount;
 
@@ -869,16 +871,16 @@ impl StakePool {
         self.fund.delayed_withdrawn_fund.delayed_withdrawal_registry.insert(&predecessor_account_id, &delayed_withdrawal);
         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount += near_amount;
 
-        token_balance -= token_amount;
+        account_balance.token_amount -= token_amount;
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if self.convert_token_amount_to_near_amount(token_balance) < investor_investment.staked_balance {
+            if (self.convert_token_amount_to_near_amount(account_balance.token_amount) + account_balance.investment_near_amount) < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to delayed withdraw token amount.");
             }
         }
-        let released_storage_staking_price_per_additional_account_log = if token_balance > 0
+        let released_storage_staking_price_per_additional_account_log = if account_balance.token_amount > 0
             || predecessor_account_id == self.account_registry.self_fee_receiver_account_id
             || predecessor_account_id == self.account_registry.partner_fee_receiver_account_id  {
-            self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+            self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
 
             0
         } else {
@@ -935,11 +937,11 @@ impl StakePool {
                 &current_account_id_log,
                 self.fund.get_common_balance() + near_amount,
                 &predecessor_account_id,
-                token_balance + token_amount,
+                account_balance.token_amount + token_amount,
                 &predecessor_account_id,
                 token_amount,
                 &predecessor_account_id,
-                token_balance,
+                account_balance.token_amount,
                 &current_account_id_log,
                 self.fund.get_common_balance(),
                 &current_account_id_log,
