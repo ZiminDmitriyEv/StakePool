@@ -6,5 +6,6 @@ use near_sdk::serde::{Deserialize, Serialize};
 pub struct BaseAccountBalance {
     pub token_balance: U128,
     pub common_near_balance: U128,
-    pub classic_near_balance: U128
+    pub classic_near_balance: U128,
+    pub classic_near_balance_token_coverage: U128
 }

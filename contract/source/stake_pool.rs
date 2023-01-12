@@ -18,6 +18,7 @@ use super::data_transfer_object::full_for_account::FullForAccount;
 use super::data_transfer_object::full::Full;
 use super::data_transfer_object::fund::Fund as FundDto;
 use super::data_transfer_object::fungible_token_metadata::FungibleTokenMetadata as FungibleTokenMetadataDto;
+use super::data_transfer_object::investment_account_balance::InvestmentAccountBalance;
 use super::data_transfer_object::investor_investment::InvestorInvestment as InvestorInvestmentDto;
 use super::data_transfer_object::requested_to_withdrawal_fund::RequestedToWithdrawalFund;
 use super::data_transfer_object::storage_staking_price::StorageStakingPrice;
@@ -962,7 +963,7 @@ impl StakePool {
     fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
 
 
-        // ЧТо здесь делать с near_remainder
+        // ЧТо здесь делать с near_remainder. Проверить, должен ли откуда-то вычитаться этот остаток.
 
 
 
@@ -1932,15 +1933,23 @@ impl StakePool {
                             env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
                         }
 
+                        let (investment_near_balance_token_coverage, _) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
+
                         AccountBalanceDto {
                             base_account_balance: Some(
                                 BaseAccountBalance {
                                     token_balance: account_balance.token_amount.into(),
                                     common_near_balance: common_near_balance.into(),
                                     classic_near_balance: (common_near_balance - investor_investment.staked_balance).into(),
+                                    classic_near_balance_token_coverage: (account_balance.token_amount - investment_near_balance_token_coverage).into()
                                 }
                             ),
-                            investment_account_balance: Some(investor_investment.staked_balance.into())
+                            investment_account_balance: Some(
+                                InvestmentAccountBalance {
+                                    near_balance: investor_investment.staked_balance.into(),
+                                    near_balance_token_coverage: investment_near_balance_token_coverage.into()
+                                }
+                            )
                         }
                     }
                     None => {
@@ -1950,6 +1959,7 @@ impl StakePool {
                                     token_balance: account_balance.token_amount.into(),
                                     common_near_balance: common_near_balance.into(),
                                     classic_near_balance: common_near_balance.into(),
+                                    classic_near_balance_token_coverage: account_balance.token_amount.into(),
                                 }
                             ),
                             investment_account_balance: None
@@ -1959,11 +1969,8 @@ impl StakePool {
             }
             None => {
                 match self.validating.investor_investment_registry.get(&account_id) {
-                    Some(investor_investment) => {
-                        AccountBalanceDto {
-                            base_account_balance: None,
-                            investment_account_balance: Some(investor_investment.staked_balance.into())
-                        }
+                    Some(_) => {
+                        env::panic_str("Nonexecutable code. Token account shoul exist if investor investment exists.");
                     }
                     None => {
                         AccountBalanceDto {

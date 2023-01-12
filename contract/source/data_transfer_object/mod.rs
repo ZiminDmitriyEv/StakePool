@@ -9,6 +9,7 @@ pub(crate) mod full_for_account;
 pub(crate) mod full;
 pub(crate) mod fund;
 pub(crate) mod fungible_token_metadata;
+pub(crate) mod investment_account_balance;
 pub(crate) mod investor_investment;
 pub(crate) mod requested_to_withdrawal_fund;
 pub(crate) mod storage_staking_price;
