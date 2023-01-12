@@ -703,7 +703,7 @@ impl StakePool {
             account_balance.token_amount += instant_withdraw_fee_self_token_amount;
         } else {
             let mut account_balance_ = match self.fungible_token.account_registry.get(&self.account_registry.self_fee_receiver_account_id) {
-                Some(mut account_balance__) => account_balance__,
+                Some(account_balance__) => account_balance__,
                 None => {
                     env::panic_str("Nonexecutable code. Object must exist.");
                 }
@@ -716,7 +716,7 @@ impl StakePool {
             account_balance.token_amount += instant_withdraw_fee_partner_token_amount
         } else {
             let mut account_balance_ = match self.fungible_token.account_registry.get(&self.account_registry.partner_fee_receiver_account_id) {
-                Some(mut account_balance__) => account_balance__,
+                Some(account_balance__) => account_balance__,
                 None => {
                     env::panic_str("Nonexecutable code. Object must exist.");
                 }
@@ -1799,7 +1799,7 @@ impl StakePool {
             self.fungible_token.account_registry.remove(&predecessor_account_id);
             self.fungible_token.accounts_quantity -= 1;
 
-            receiver_account_balance.classic_near_amount + predecessor_account_balance.classic_near_amount;
+            receiver_account_balance.classic_near_amount += predecessor_account_balance.classic_near_amount;
 
             refundable_near_amount += Self::calculate_storage_staking_price(self.fungible_token.storage_usage_per_account);
         }
