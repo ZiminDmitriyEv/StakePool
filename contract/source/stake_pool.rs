@@ -4,6 +4,7 @@ use near_contract_standards::fungible_token::metadata::{FungibleTokenMetadata, F
 use near_sdk::{env, near_bindgen, PanicOnDefault, AccountId, Balance, EpochHeight, Promise, PromiseResult, StorageUsage, Gas, PromiseOrValue};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
+use super::account_balance::AccountBalance;
 use super::account_registry::AccountRegistry;
 use super::cross_contract_call::validator::validator;
 use super::data_transfer_object::account_balance::AccountBalance;
@@ -373,6 +374,11 @@ impl StakePool {
             None => predecessor_account_id.clone()
         };
 
+        let account_balance = AccountBalance {
+            token_amount: 0,
+            near_amount: 0
+        };
+
         let mut stake_pool = Self {
             account_registry: AccountRegistry {
                 owner_id: predecessor_account_id,
@@ -393,8 +399,8 @@ impl StakePool {
                 total_rewards_from_validators_near_amount: 0
             }
         };
-        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.self_fee_receiver_account_id, &0);
-        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.partner_fee_receiver_account_id, &0);
+        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.self_fee_receiver_account_id, &account_balance);
+        stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.partner_fee_receiver_account_id, &account_balance);
         stake_pool.fungible_token.accounts_quantity = 2;
 
         stake_pool

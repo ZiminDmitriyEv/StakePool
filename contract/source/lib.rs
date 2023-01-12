@@ -2,6 +2,7 @@ use near_sdk::ONE_NEAR;
 use near_sdk::Balance;
 
 pub mod stake_pool;
+pub(crate) mod account_balance;
 pub(crate) mod account_registry;
 pub(crate) mod cross_contract_call;
 pub(crate) mod data_transfer_object;
