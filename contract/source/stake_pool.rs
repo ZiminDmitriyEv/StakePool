@@ -600,7 +600,7 @@ impl StakePool {
         }
         let refundable_near_amount = available_for_staking_near_amount - near_amount;
 
-        let token_amount = self.convert_near_amount_to_token_amount(near_amount);
+        let (token_amount, near_remainder) = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
             env::panic_str("Insufficient near deposit.");
         }
@@ -619,6 +619,7 @@ impl StakePool {
                                 attached_deposit,
                                 refundable_near_amount,
                                 token_amount,
+                                near_remainder,
                                 storage_staking_price_per_additional_accounts
                             )
                     )
@@ -2336,6 +2337,7 @@ impl StakePool {
         attached_deposit: Balance,
         refundable_near_amount: Balance,
         token_amount: Balance,
+        near_remainder: Balance,
         storage_staking_price_per_additional_accounts: Balance
     ) -> bool {
         if env::promise_results_count() == 0 {
@@ -2372,16 +2374,17 @@ impl StakePool {
                 investor_investment.staked_balance += near_amount;
                 self.validating.investor_investment_registry.insert(&predecessor_account_id, &investor_investment);
 
-                let mut token_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
-                    Some(token_balance_) => token_balance_,
+                let mut account_balance = match self.fungible_token.account_registry.get(&predecessor_account_id) {
+                    Some(account_balance_) => account_balance_,
                     None => {
                         self.fungible_token.accounts_quantity += 1;
 
-                        0
+                        AccountBalance { token_amount: 0, near_amount: 0 }
                     }
                 };
-                token_balance += token_amount;
-                self.fungible_token.account_registry.insert(&predecessor_account_id, &token_balance);
+                account_balance.token_amount += token_amount;
+                account_balance.near_amount += near_remainder;
+                self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
                 self.fungible_token.total_supply += token_amount;
 
                 self.fund.investment_staked_balance += near_amount;
@@ -2420,11 +2423,11 @@ impl StakePool {
                         &current_account_id_log,
                         self.fund.get_common_balance() - near_amount,
                         &predecessor_account_id,
-                        token_balance - token_amount,
+                        account_balance.token_amount - token_amount,
                         &predecessor_account_id,
                         token_amount,
                         &predecessor_account_id,
-                        token_balance,
+                        account_balance.token_amount,
                         &current_account_id_log,
                         self.fund.get_common_balance(),
                         &current_account_id_log,
