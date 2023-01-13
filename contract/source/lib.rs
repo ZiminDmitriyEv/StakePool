@@ -1,30 +1,34 @@
 use near_sdk::ONE_NEAR;
-use near_sdk::Balance;
+use near_sdk::{AccountId, Balance};
 
 pub mod stake_pool;
-pub(crate) mod account_balance;
-pub(crate) mod account_registry;
-pub(crate) mod cross_contract_call;
-pub(crate) mod data_transfer_object;
-pub(crate) mod delayed_withdrawal;
-pub(crate) mod delayed_withdrawn_fund;
-pub(crate) mod fee_registry;
-pub(crate) mod fee;
-pub(crate) mod fund;
-pub(crate) mod fungible_token;
-pub(crate) mod investment_withdrawal;
-pub(crate) mod investor_investment;
-pub(crate) mod reward;
-pub(crate) mod shared_fee;
-pub(crate) mod stake_decreasing_kind;
-pub(crate) mod staking_contract_version;
-pub(crate) mod storage_key;
-pub(crate) mod validating;
-pub(crate) mod validator;
+mod account_balance;
+mod account_registry;
+mod cross_contract_call;
+mod data_transfer_object;
+mod delayed_withdrawal;
+mod delayed_withdrawn_fund;
+mod fee_registry;
+mod fee;
+mod fund;
+mod fungible_token;
+mod investment_withdrawal;
+mod investor_investment;
+mod reward;
+mod shared_fee;
+mod stake_decreasing_kind;
+mod staking_contract_version;
+mod storage_key;
+mod validating;
+mod validator;
 
-pub const EPOCH_QUANTITY_FOR_DELAYED_WITHDRAWAL: u64 = 8;
-pub const EPOCH_QUANTITY_FOR_VALIDATOR_UNSTAKE: u64 = 4;
-pub const MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: u8 = 64;
-pub const MAXIMUM_NUMBER_OF_TGAS: u64 = 300;
+const EPOCH_QUANTITY_FOR_DELAYED_WITHDRAWAL: u64 = 8;
+const EPOCH_QUANTITY_FOR_VALIDATOR_UNSTAKE: u64 = 4;
+const MAXIMUM_NUMBER_OF_TGAS: u64 = 300;
 /// The minimum near amount that must be attached to a transaction.
-pub const MINIMUN_DEPOSIT_AMOUNT: Balance = ONE_NEAR;
+const MINIMUN_DEPOSIT_AMOUNT: Balance = ONE_NEAR;
+const MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME: usize = 64;
+
+fn get_account_id_with_maximum_length() -> AccountId {
+    AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME))
+}

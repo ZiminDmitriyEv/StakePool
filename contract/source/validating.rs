@@ -1,8 +1,8 @@
 use near_sdk::{env, StorageUsage, AccountId};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{UnorderedMap, LookupMap};
+use super::get_account_id_with_maximum_length;
 use super::investor_investment::InvestorInvestment;
-use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
 use super::staking_contract_version::StakingContractVersion;
 use super::storage_key::StorageKey;
 use super::validator::Validator;
@@ -42,7 +42,7 @@ impl Validating {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = get_account_id_with_maximum_length();
 
         validator_registry.insert(
             &account_id, &Validator::new(StakingContractVersion::Classic, false)
@@ -52,19 +52,19 @@ impl Validating {
     }
 
     fn calculate_storage_usage_per_additional_investor_investment() -> StorageUsage {
-        let mut investor_registry = Self::initialize_investor_investment_registry();
+        let mut investor_investment_registry = Self::initialize_investor_investment_registry();
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = get_account_id_with_maximum_length();
 
-        investor_registry.insert(&account_id, &InvestorInvestment::new(account_id.clone()));
+        investor_investment_registry.insert(&account_id, &InvestorInvestment::new(account_id.clone()));
 
         env::storage_usage() - initial_storage_usage
     }
 
     fn calculate_storage_usage_per_additional_distribution() -> StorageUsage {
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = get_account_id_with_maximum_length();
 
         let mut distribution_registry = InvestorInvestment::initialize_distribution_registry(account_id.clone());
 

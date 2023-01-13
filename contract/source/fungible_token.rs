@@ -3,7 +3,7 @@ use near_sdk::{env, AccountId, Balance, StorageUsage};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::collections::{LazyOption, LookupMap};
 use super::account_balance::AccountBalance;
-use super::MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME;
+use super::get_account_id_with_maximum_length;
 use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
@@ -32,7 +32,7 @@ impl FungibleToken {
 
         let initial_storage_usage = env::storage_usage();
 
-        let account_id = AccountId::new_unchecked("a".repeat(MAXIMUM_NUMBER_OF_CHARACTERS_IN_ACCOUNT_NAME as usize));
+        let account_id = get_account_id_with_maximum_length();
 
         account_registry.insert(
             &account_id,
