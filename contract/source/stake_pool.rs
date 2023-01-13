@@ -1923,61 +1923,62 @@ impl StakePool {
     fn internal_get_account_balance(&self, account_id: AccountId) -> AccountBalanceDto {
         match self.fungible_token.account_registry.get(&account_id) {
             Some(account_balance) => {
-                if account_balance.token_amount > 0 {
-                    let common_near_balance = self.convert_token_amount_to_near_amount(account_balance.token_amount)
-                    + account_balance.classic_near_amount
-                    + account_balance.investment_near_amount;
+                let common_near_balance = self.convert_token_amount_to_near_amount(account_balance.token_amount)
+                + account_balance.classic_near_amount
+                + account_balance.investment_near_amount;
 
-                    match self.validating.investor_investment_registry.get(&account_id) {
-                        Some(investor_investment) => {
-                            if common_near_balance < investor_investment.staked_balance {
-                                env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
-                            }
-
-                            let (investment_near_balance_token_coverage, _) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
-
-                            AccountBalanceDto {
-                                base_account_balance: Some(
-                                    BaseAccountBalance {
-                                        token_balance: account_balance.token_amount.into(),
-                                        common_near_balance: common_near_balance.into(),
-                                        classic_near_balance: (common_near_balance - investor_investment.staked_balance).into(),
-                                        classic_near_balance_token_coverage: (account_balance.token_amount - investment_near_balance_token_coverage).into()
-                                    }
-                                ),
-                                investment_account_balance: Some(
-                                    InvestmentAccountBalance {
-                                        near_balance: investor_investment.staked_balance.into(),
-                                        near_balance_token_coverage: investment_near_balance_token_coverage.into()
-                                    }
-                                )
-                            }
+                match self.validating.investor_investment_registry.get(&account_id) {
+                    Some(investor_investment) => {
+                        if common_near_balance < investor_investment.staked_balance {
+                            env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
                         }
-                        None => {
-                            AccountBalanceDto {
-                                base_account_balance: Some(
-                                    BaseAccountBalance {
-                                        token_balance: account_balance.token_amount.into(),
-                                        common_near_balance: common_near_balance.into(),
-                                        classic_near_balance: common_near_balance.into(),
-                                        classic_near_balance_token_coverage: account_balance.token_amount.into(),
-                                    }
-                                ),
-                                investment_account_balance: None
-                            }
+
+                        let (investment_near_balance_token_coverage, _) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
+
+                        AccountBalanceDto {
+                            base_account_balance: Some(
+                                BaseAccountBalance {
+                                    token_balance: account_balance.token_amount.into(),
+                                    common_near_balance: common_near_balance.into(),
+                                    classic_near_balance: (common_near_balance - investor_investment.staked_balance).into(),
+                                    classic_near_balance_token_coverage: (account_balance.token_amount - investment_near_balance_token_coverage).into()
+                                }
+                            ),
+                            investment_account_balance: Some(
+                                InvestmentAccountBalance {
+                                    near_balance: investor_investment.staked_balance.into(),
+                                    near_balance_token_coverage: investment_near_balance_token_coverage.into()
+                                }
+                            )
                         }
                     }
-                } else {
-                    AccountBalanceDto {
-                        base_account_balance: None,
-                        investment_account_balance: None
+                    None => {
+                        AccountBalanceDto {
+                            base_account_balance: Some(
+                                BaseAccountBalance {
+                                    token_balance: account_balance.token_amount.into(),
+                                    common_near_balance: common_near_balance.into(),
+                                    classic_near_balance: common_near_balance.into(),
+                                    classic_near_balance_token_coverage: account_balance.token_amount.into(),
+                                }
+                            ),
+                            investment_account_balance: None
+                        }
                     }
                 }
             }
             None => {
                 match self.validating.investor_investment_registry.get(&account_id) {
                     Some(_) => {
-                        env::panic_str("Nonexecutable code. Token account shoul exist if investor investment exists.");
+                        AccountBalanceDto {
+                            base_account_balance: None,
+                            investment_account_balance: Some(
+                                InvestmentAccountBalance {
+                                    near_balance: 0.into(),
+                                    near_balance_token_coverage: 0.into()
+                                }
+                            )
+                        }
                     }
                     None => {
                         AccountBalanceDto {
