@@ -372,8 +372,6 @@ impl StakePool {
 
         let predecessor_account_id = env::predecessor_account_id();
 
-        let mut storage_usage = Self::calculate_storage_usage_per_pool(&fungible_token_metadata_, predecessor_account_id.clone());
-
         let manager_id_ = match manager_id {
             Some(manager_id__) => manager_id__,
             None => predecessor_account_id.clone()
@@ -408,23 +406,6 @@ impl StakePool {
         stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.self_fee_receiver_account_id, &account_balance);
         stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.partner_fee_receiver_account_id, &account_balance);
         stake_pool.fungible_token.accounts_quantity = 2;
-
-        storage_usage += 2 * stake_pool.fungible_token.storage_usage_per_account;
-
-        let storage_staking_price = Self::calculate_storage_staking_price(storage_usage);
-
-        let attached_deposit = env::attached_deposit();
-
-        let refundable_near_amount = if attached_deposit < storage_staking_price {
-            env::panic_str("Insufficient near deposit.");
-        } else {
-            attached_deposit - storage_staking_price
-        };
-
-        if refundable_near_amount > 0 {
-            Promise::new(predecessor_account_id)
-                .transfer(refundable_near_amount);
-        }
 
         stake_pool
     }
@@ -2299,52 +2280,6 @@ impl StakePool {
                 env::panic_str("Calculation overflow.");
             }
         }
-    }
-
-    fn calculate_storage_usage_per_pool(
-        fungible_token_metadata: &FungibleTokenMetadata,
-        owner_id: AccountId
-    ) -> StorageUsage {
-        let account_id = get_account_id_with_maximum_length();
-
-        let fee = Fee {
-            numerator: 1,
-            denominator: 2
-        };
-        fee.assert_valid();
-
-        let shared_fee = SharedFee {
-            self_fee: fee.clone(),
-            partner_fee: Some(fee.clone())
-        };
-
-        let initial_storage_usage = env::storage_usage();
-
-        let mut validating = Validating::new();
-        validating.preffered_validator = Some(account_id.clone());
-
-        let _ = StakePool {
-            account_registry: AccountRegistry {
-                owner_id,
-                manager_id: account_id.clone(),
-                self_fee_receiver_account_id: account_id.clone(),
-                partner_fee_receiver_account_id: account_id.clone()
-            },
-            fee_registry: FeeRegistry {
-                reward_fee: Some(shared_fee.clone()),
-                instant_withdraw_fee: Some(shared_fee.clone())
-            },
-            fungible_token: FungibleToken::new(fungible_token_metadata.clone()),
-            fund: Fund::new(),
-            validating,
-            current_epoch_height: env::epoch_height(),
-            reward: Reward {
-                previous_epoch_rewards_from_validators_near_amount: 0,
-                total_rewards_from_validators_near_amount: 0
-            }
-        };
-
-        env::storage_usage() - initial_storage_usage
     }
 }
 
