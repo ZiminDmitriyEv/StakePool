@@ -372,6 +372,8 @@ impl StakePool {
 
         let predecessor_account_id = env::predecessor_account_id();
 
+        let mut storage_usage = Self::calculate_storage_usage_per_pool(&fungible_token_metadata_, predecessor_account_id.clone());
+
         let manager_id_ = match manager_id {
             Some(manager_id__) => manager_id__,
             None => predecessor_account_id.clone()
@@ -407,7 +409,6 @@ impl StakePool {
         stake_pool.fungible_token.account_registry.insert(&stake_pool.account_registry.partner_fee_receiver_account_id, &account_balance);
         stake_pool.fungible_token.accounts_quantity = 2;
 
-        let mut storage_usage = Self::calculate_storage_usage_per_pool(&fungible_token_metadata_, predecessor_account_id.clone());
         storage_usage += 2 * stake_pool.fungible_token.storage_usage_per_account;
 
         let storage_staking_price = Self::calculate_storage_staking_price(storage_usage);
