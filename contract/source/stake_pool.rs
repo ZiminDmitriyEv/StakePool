@@ -786,7 +786,7 @@ impl StakePool {
                 &predecessor_account_id,
                 token_balance_log,
                 &predecessor_account_id,
-                token_amount + instant_withdraw_fee_self_token_amount,
+                token_amount + instant_withdraw_fee_self_token_amount + instant_withdraw_fee_partner_token_amount,
                 &predecessor_account_id,
                 account_balance.token_amount,
                 &current_account_id_log,
