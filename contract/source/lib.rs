@@ -20,6 +20,7 @@ mod stake_decreasing_kind;
 mod staking_contract_version;
 mod storage_key;
 mod validating;
+mod validator_balance;
 mod validator;
 
 const EPOCH_QUANTITY_FOR_DELAYED_WITHDRAWAL: u64 = 8;

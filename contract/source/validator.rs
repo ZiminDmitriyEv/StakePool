@@ -1,12 +1,11 @@
 use near_sdk::{env, EpochHeight, Balance};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use super::staking_contract_version::StakingContractVersion;
+use super::validator_balance::ValidatorBalance;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Validator {
-    pub unstaked_balance: Balance,
-    pub classic_staked_balance: Balance,
-    pub investment_staked_balance: Balance,
+    pub balance: ValidatorBalance,
     pub staking_contract_version: StakingContractVersion,
     /// Validator, which is needed ONLY for investment purpose.
     /// The pool should not distribute unstaked balance to validators with a TRUE value,
@@ -26,9 +25,12 @@ impl Validator {
         is_only_for_investment: bool
     ) -> Self {
         Self {
-            unstaked_balance: 0,
-            classic_staked_balance: 0,
-            investment_staked_balance: 0,
+            balance: ValidatorBalance {
+                classic_staked_balance: 0,
+                investment_staked_balance: 0,
+                unstaked_balance: 0,
+                requested_to_withdrawal_unstaked_balance: 0
+            },
             staking_contract_version,
             is_only_for_investment,
             last_update_epoch_height: env::epoch_height(),
@@ -37,6 +39,7 @@ impl Validator {
     }
 
     pub fn get_staked_balance(&self) -> Balance {
-        self.classic_staked_balance + self.investment_staked_balance
+        // self.classic_staked_balance + self.investment_staked_balance
+        todo!();
     }
 }
