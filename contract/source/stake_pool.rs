@@ -30,7 +30,6 @@ use super::fee_registry::FeeRegistry;
 use super::fee::Fee;
 use super::fund::Fund;
 use super::fungible_token::FungibleToken;
-use super::get_account_id_with_maximum_length;
 use super::investment_withdrawal::InvestmentWithdrawal;
 use super::investor_investment::InvestorInvestment;
 use super::MAXIMUM_NUMBER_OF_TGAS;
@@ -105,22 +104,6 @@ impl StakePool {
     pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
         self.internal_instant_withdraw(token_amount.into())
     }
-
-
-
-
-
-
-
-
-    #[payable]
-    pub fn inc(&mut self) {
-        self.fund.classic_unstaked_balance += 300000000000000000000;
-    }
-
-
-
-
 
     /// Delayed unstake process.
     #[payable]
@@ -2191,6 +2174,7 @@ impl StakePool {
             storage_staking_price: self.internal_get_storage_staking_price(),
             fund: self.internal_get_fund(),
             total_token_supply: self.internal_get_total_token_supply().into(),
+            requested_to_withdrawal_fund: self.internal_get_requested_to_withdrawal_fund(),
             fee_registry_light: self.internal_get_fee_registry_light(),
             minimum_deposit_amount: self.get_minimum_deposit_amount()
         }
