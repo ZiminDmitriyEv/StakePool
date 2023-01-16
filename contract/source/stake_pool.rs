@@ -106,6 +106,22 @@ impl StakePool {
         self.internal_instant_withdraw(token_amount.into())
     }
 
+
+
+
+
+
+
+
+    #[payable]
+    pub fn inc(&mut self) {
+        self.fund.classic_unstaked_balance += 300000000000000000000;
+    }
+
+
+
+
+
     /// Delayed unstake process.
     #[payable]
     pub fn delayed_withdraw(&mut self, token_amount: U128) -> PromiseOrValue<()> {
@@ -1937,7 +1953,11 @@ impl StakePool {
                             env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
                         }
 
-                        let (investment_near_balance_token_coverage, _) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
+                        let (mut investment_near_balance_token_coverage, near_remainder) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
+
+                        if near_remainder > 0 {
+                            investment_near_balance_token_coverage += 1;
+                        }
 
                         AccountBalanceDto {
                             base_account_balance: Some(
