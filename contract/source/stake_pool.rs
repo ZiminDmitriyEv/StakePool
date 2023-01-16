@@ -964,36 +964,6 @@ impl StakePool {
     }
 
     fn internal_delayed_withdraw_from_validator(&mut self, near_amount: Balance, validator_account_id: AccountId) -> PromiseOrValue<()> {
-
-
-        // ЧТо здесь делать с near_remainder. Проверить, должен ли откуда-то вычитаться этот остаток.
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         Self::assert_gas_is_enough();
         Self::assert_natural_deposit();
         self.assert_epoch_is_synchronized();
@@ -1060,7 +1030,7 @@ impl StakePool {
             env::panic_str("Near amount exceeded the available near balance on validator.");
         }
 
-        let (token_amount, near_remainder) = self.convert_near_amount_to_token_amount(near_amount);
+        let (token_amount, _) = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
             env::panic_str("Insufficient near amount.");
         }
