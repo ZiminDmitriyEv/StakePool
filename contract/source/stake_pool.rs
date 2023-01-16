@@ -1224,32 +1224,29 @@ impl StakePool {
         if near_amount == 0 {
             env::panic_str("Insufficient near amount.");
         }
-
-        if self.fund.classic_unstaked_balance == 0
-            || !(1..=self.fund.classic_unstaked_balance).contains(&near_amount) {
-                env::panic_str("Near amount exceeded the available unstaked near balance.");
+        if near_amount > self.fund.classic_unstaked_balance {
+            env::panic_str("Near amount exceeded the available unstaked near balance.");
         }
 
-        match self.validating.validator_registry.get(&validator_account_id) {
-            Some(validator) => {
-                if validator.is_only_for_investment {
-                    env::panic_str("Validator is used only for investment purpose.");
-                }
-
-                match validator.staking_contract_version {
-                    StakingContractVersion::Classic => {
-                        validator::ext(validator_account_id.clone())
-                            .with_attached_deposit(near_amount)
-                            .deposit_and_stake()
-                            .then(
-                                Self::ext(env::current_account_id())
-                                    .increase_validator_stake_callback(validator_account_id, near_amount, env::epoch_height())
-                            )
-                    }
-                }
-            }
+        let validator = match self.validating.validator_registry.get(&validator_account_id) {
+            Some(validator_) => validator_,
             None => {
                 env::panic_str("Validator account is not registered yet.");
+            }
+        };
+        if validator.is_only_for_investment {
+            env::panic_str("Validator is used only for investment purpose.");
+        }
+
+        match validator.staking_contract_version {
+            StakingContractVersion::Classic => {
+                validator::ext(validator_account_id.clone())
+                    .with_attached_deposit(near_amount)
+                    .deposit_and_stake()
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .increase_validator_stake_callback(validator_account_id, near_amount, env::epoch_height())
+                    )
             }
         }
     }
@@ -2412,7 +2409,7 @@ impl StakePool {
                     }
                 };
                 account_balance.token_amount += token_amount;
-                account_balance.classic_near_amount += near_remainder;
+                account_balance.investment_near_amount += near_remainder;
                 self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance);
                 self.fungible_token.total_supply += token_amount;
 
