@@ -26,10 +26,9 @@ impl Validator {
     ) -> Self {
         Self {
             balance: ValidatorBalance {
-                classic_staked_balance: 0,
-                investment_staked_balance: 0,
-                unstaked_balance: 0,
-                requested_to_withdrawal_unstaked_balance: 0
+                classic_total_near_amount: 0,
+                investment_total_near_amount: 0,
+                requested_near_amount: 0
             },
             staking_contract_version,
             is_only_for_investment,
@@ -38,6 +37,7 @@ impl Validator {
         }
     }
 
+    // TODO УБрать метод
     pub fn get_staked_balance(&self) -> Balance {
         // self.classic_staked_balance + self.investment_staked_balance
         todo!();
