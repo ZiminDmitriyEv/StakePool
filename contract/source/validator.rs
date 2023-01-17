@@ -26,20 +26,14 @@ impl Validator {
     ) -> Self {
         Self {
             balance: ValidatorBalance {
-                classic_total_near_amount: 0,
-                investment_total_near_amount: 0,
-                requested_near_amount: 0
+                classic_near_amount: 0,
+                investment_near_amount: 0,
+                requested_to_withdrawal_near_amount: 0
             },
             staking_contract_version,
             is_only_for_investment,
             last_update_epoch_height: env::epoch_height(),
             last_classic_stake_increasing_epoch_height: None
         }
-    }
-
-    // TODO УБрать метод
-    pub fn get_staked_balance(&self) -> Balance {
-        // self.classic_staked_balance + self.investment_staked_balance
-        todo!();
     }
 }

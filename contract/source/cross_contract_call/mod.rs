@@ -1,1 +1,1 @@
-pub(crate) mod validator;
+pub(crate) mod classic_validator;

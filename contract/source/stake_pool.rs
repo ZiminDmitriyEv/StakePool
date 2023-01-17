@@ -6,7 +6,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use near_sdk::json_types::U128;
 use super::account_balance::AccountBalance;
 use super::account_registry::AccountRegistry;
-use super::cross_contract_call::validator::validator;
+use super::cross_contract_call::classic_validator::classic_validator;
 use super::data_transfer_object::account_balance::AccountBalance as AccountBalanceDto;
 use super::data_transfer_object::aggregated::Aggregated;
 use super::data_transfer_object::base_account_balance::BaseAccountBalance;
@@ -462,7 +462,7 @@ impl StakePool {
                             match validator.staking_contract_version {
                                 StakingContractVersion::Classic => {
                                     PromiseOrValue::Promise(
-                                        validator::ext(preffered_validator_account_id.clone())
+                                        classic_validator::ext(preffered_validator_account_id.clone())
                                             .with_attached_deposit(near_amount)
                                             .deposit_and_stake()
                                             .then(
@@ -610,7 +610,7 @@ impl StakePool {
 
         match validator.staking_contract_version {
             StakingContractVersion::Classic => {
-                validator::ext(validator_account_id.clone())
+                classic_validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
                     .deposit_and_stake()
                     .then(
@@ -638,8 +638,6 @@ impl StakePool {
         if token_amount == 0 {
             env::panic_str("Insufficient token amount.");
         }
-
-
 
         let token_amount_log = token_amount;
 
@@ -1026,7 +1024,7 @@ impl StakePool {
                 )
             }
         };
-        if near_amount > (validator.balance.investment_total_near_amount - investment_withdrawal.near_amount) {
+        if near_amount > (validator.balance.investment_near_amount - investment_withdrawal.near_amount) {
             env::panic_str("Near amount exceeded the available near balance on validator.");
         }
 
@@ -1240,7 +1238,7 @@ impl StakePool {
 
         match validator.staking_contract_version {
             StakingContractVersion::Classic => {
-                validator::ext(validator_account_id.clone())
+                classic_validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
                     .deposit_and_stake()
                     .then(
@@ -1276,7 +1274,7 @@ impl StakePool {
         };
         match stake_decreasing_type {
             StakeDecreasingType::Classic => {
-                if near_amount > validator.balance.classic_total_near_amount {
+                if near_amount > validator.balance.classic_near_amount {
                     env::panic_str("Near amount exceeded the available staked near balance.");
                 }
                 if near_amount > self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount {
@@ -1284,7 +1282,7 @@ impl StakePool {
                 }
             }
             StakeDecreasingType::Investment => {
-                if near_amount > validator.balance.investment_total_near_amount {
+                if near_amount > validator.balance.investment_near_amount {
                     env::panic_str("Near amount exceeded the available unstaked near balance.");
                 }
                 if near_amount > self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount {
@@ -1303,13 +1301,15 @@ impl StakePool {
             }
         }
 
+        let current_account_id = env::current_account_id();
+
         match validator.staking_contract_version {
             StakingContractVersion::Classic => {
-                validator::ext(validator_account_id.clone())
-                    .unstake(near_amount.into())
+                classic_validator::ext(validator_account_id.clone())
+                    .get_account_unstaked_balance(current_account_id.clone())
                     .then(
-                        Self::ext(env::current_account_id())
-                            .requested_decrease_validator_stake_callback(
+                        Self::ext(current_account_id)
+                            .requested_decrease_validator_stake_callback_1(
                                 validator_account_id,
                                 near_amount,
                                 stake_decreasing_type,
@@ -1330,10 +1330,9 @@ impl StakePool {
         if !Self::is_right_epoch(current_epoch_height) {
             env::panic_str("Epoch is not intended for a take unstaked balance.");
         }
-
         match self.validating.validator_registry.get(&validator_account_id) {
             Some(validator) => {
-                if validator.balance.requested_near_amount == 0 {
+                if validator.balance.requested_to_withdrawal_near_amount == 0 {
                     env::panic_str("Insufficient unstaked balance on validator.");
                 }
                 if validator.last_update_epoch_height >= current_epoch_height {
@@ -1342,8 +1341,8 @@ impl StakePool {
 
                 match validator.staking_contract_version {
                     StakingContractVersion::Classic => {
-                        validator::ext(validator_account_id.clone())
-                            .withdraw(validator.balance.requested_near_amount.into())
+                        classic_validator::ext(validator_account_id.clone())
+                            .withdraw(validator.balance.requested_to_withdrawal_near_amount.into())
                             .then(
                                 Self::ext(env::current_account_id())
                                     .take_unstaked_balance_callback(validator_account_id)
@@ -1367,12 +1366,13 @@ impl StakePool {
                 let current_epoch_height = env::epoch_height();
 
                 if validator.last_update_epoch_height < current_epoch_height {
+                    let current_account_id = env::current_account_id();
                     match validator.staking_contract_version {
                         StakingContractVersion::Classic => {
-                            validator::ext(validator_account_id.clone())
-                                .get_account_total_balance(env::current_account_id())
+                            classic_validator::ext(validator_account_id.clone())
+                                .get_account_total_balance(current_account_id.clone())
                                 .then(
-                                    Self::ext(env::current_account_id())
+                                    Self::ext(current_account_id)
                                         .update_validator_callback(validator_account_id, current_epoch_height)
                                 )
                         }
@@ -1511,9 +1511,9 @@ impl StakePool {
                 env::panic_str("Validator account is not registered yet.");
             }
         };
-        if validator.balance.classic_total_near_amount > 0
-            || validator.balance.investment_total_near_amount > 0
-            || validator.balance.requested_near_amount > 0 {
+        if validator.balance.classic_near_amount > 0
+            || validator.balance.investment_near_amount > 0
+            || validator.balance.requested_to_withdrawal_near_amount > 0 {
             env::panic_str("Validator has an available balance.");
         }
 
@@ -1554,7 +1554,7 @@ impl StakePool {
                 }
             }
 
-            if validator.balance.classic_total_near_amount > 0 {
+            if validator.balance.classic_near_amount > 0 {
                 env::panic_str("Validator classic staked balance is not equal to zero.");
             }
         }
@@ -2047,9 +2047,9 @@ impl StakePool {
             validator_dto_registry.push(
                 ValidatorDto {
                     account_id,
-                    unstaked_balance: validator.balance.requested_near_amount.into(),
-                    classic_staked_balance: validator.balance.classic_total_near_amount.into(),
-                    investment_staked_balance: validator.balance.investment_total_near_amount.into(),
+                    unstaked_balance: validator.balance.requested_to_withdrawal_near_amount.into(),
+                    classic_staked_balance: validator.balance.classic_near_amount.into(),
+                    investment_staked_balance: validator.balance.investment_near_amount.into(),
                     is_only_for_investment: validator.is_only_for_investment,
                     last_update_epoch_height: validator.last_update_epoch_height,
                     last_classic_stake_increasing_epoch_height: validator.last_classic_stake_increasing_epoch_height
@@ -2072,9 +2072,9 @@ impl StakePool {
             return Some(
                 ValidatorDto {
                     account_id: preffered_validator_account_id.clone(),
-                    unstaked_balance: validator.balance.requested_near_amount.into(),
-                    classic_staked_balance: validator.balance.classic_total_near_amount.into(),
-                    investment_staked_balance: validator.balance.investment_total_near_amount.into(),
+                    unstaked_balance: validator.balance.requested_to_withdrawal_near_amount.into(),
+                    classic_staked_balance: validator.balance.classic_near_amount.into(),
+                    investment_staked_balance: validator.balance.investment_near_amount.into(),
                     is_only_for_investment: validator.is_only_for_investment,
                     last_update_epoch_height: validator.last_update_epoch_height,
                     last_classic_stake_increasing_epoch_height: validator.last_classic_stake_increasing_epoch_height
@@ -2263,7 +2263,7 @@ impl StakePool {
                         env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
-                validator.balance.classic_total_near_amount += near_amount;
+                validator.balance.classic_near_amount += near_amount;
                 validator.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
@@ -2358,7 +2358,7 @@ impl StakePool {
                         env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
-                validator.balance.investment_total_near_amount += near_amount;
+                validator.balance.investment_near_amount += near_amount;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
                 let mut investor_investment = match self.validating.investor_investment_registry.get(&predecessor_account_id) {
@@ -2474,7 +2474,7 @@ impl StakePool {
                         env::panic_str("Nonexecutable code. Object must exist.");
                     }
                 };
-                validator.balance.classic_total_near_amount += near_amount;
+                validator.balance.classic_near_amount += near_amount;
                 validator.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
@@ -2487,7 +2487,68 @@ impl StakePool {
     }
 
     #[private]
-    pub fn requested_decrease_validator_stake_callback(
+    pub fn requested_decrease_validator_stake_callback_1(
+        &mut self,
+        validator_account_id: AccountId,
+        near_amount: Balance,
+        stake_decreasing_type: StakeDecreasingType,
+        refundable_near_amount: Balance
+    ) -> PromiseOrValue<CallbackResult> {
+        if env::promise_results_count() == 0 {
+            env::panic_str("Contract expected a result on the callback.");
+        }
+
+        match env::promise_result(0) {
+            PromiseResult::Successful(data) => {
+                let unstaked_balance: Balance = match near_sdk::serde_json::from_slice::<U128>(data.as_slice()) {
+                    Ok(unstaked_balance_) => unstaked_balance_.into(),
+                    Err(_) => {
+                        env::panic_str("Nonexecutable code. It should be valid JSON object.");
+                    }
+                };
+
+                let validator = match self.validating.validator_registry.get(&validator_account_id) {
+                    Some(validator_) => validator_,
+                    None => {
+                        env::panic_str("Nonexecutable code. Object must exist.");
+                    }
+                };
+
+                let unstaked_remainder = unstaked_balance - validator.balance.requested_to_withdrawal_near_amount;
+
+                let needed_to_unstake_near_amount = near_amount - unstaked_remainder;
+
+                match validator.staking_contract_version {
+                    StakingContractVersion::Classic => {
+                        PromiseOrValue::Promise(
+                            classic_validator::ext(validator_account_id.clone())
+                                .unstake(needed_to_unstake_near_amount.into())
+                                .then(
+                                    Self::ext(env::current_account_id())
+                                        .requested_decrease_validator_stake_callback_2(
+                                            validator_account_id,
+                                            near_amount,
+                                            stake_decreasing_type,
+                                            refundable_near_amount,
+                                        )
+                                )
+                        )
+                    }
+                }
+            }
+            _ => {
+                PromiseOrValue::Value(
+                    CallbackResult {
+                        is_success: false,
+                        network_epoch_height: env::epoch_height()
+                    }
+                )
+            }
+        }
+    }
+
+    #[private]
+    pub fn requested_decrease_validator_stake_callback_2(
         &mut self,
         validator_account_id: AccountId,
         near_amount: Balance,
@@ -2509,7 +2570,7 @@ impl StakePool {
 
                 match stake_decreasing_type {
                     StakeDecreasingType::Classic => {
-                        validator.balance.classic_total_near_amount -= near_amount;
+                        validator.balance.classic_near_amount -= near_amount;
                         self.fund.delayed_withdrawn_fund.needed_to_request_classic_near_amount -= near_amount;
                     }
                     StakeDecreasingType::Investment => {
@@ -2530,12 +2591,12 @@ impl StakePool {
                                 .transfer(refundable_near_amount);
                         }
 
-                        validator.balance.investment_total_near_amount -= near_amount;
+                        validator.balance.investment_near_amount -= near_amount;
                         self.fund.delayed_withdrawn_fund.needed_to_request_investment_near_amount -= near_amount;
                     }
                 }
 
-                validator.balance.requested_near_amount += near_amount;
+                validator.balance.requested_to_withdrawal_near_amount += near_amount;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
                 CallbackResult {
@@ -2567,9 +2628,9 @@ impl StakePool {
                     }
                 };
 
-                self.fund.delayed_withdrawn_fund.balance += validator.balance.requested_near_amount;
+                self.fund.delayed_withdrawn_fund.balance += validator.balance.requested_to_withdrawal_near_amount;
 
-                validator.balance.requested_near_amount = 0;
+                validator.balance.requested_to_withdrawal_near_amount = 0;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
                 CallbackResult {
@@ -2598,8 +2659,8 @@ impl StakePool {
 
         match env::promise_result(0) {
             PromiseResult::Successful(data) => {
-                let new_staked_balance: u128 = match near_sdk::serde_json::from_slice::<U128>(data.as_slice()) {
-                    Ok(new_staked_balance_) => new_staked_balance_.into(),
+                let new_balance: u128 = match near_sdk::serde_json::from_slice::<U128>(data.as_slice()) {
+                    Ok(new_balance_) => new_balance_.into(),
                     Err(_) => {
                         env::panic_str("Nonexecutable code. It should be valid JSON object.");
                     }
@@ -2612,10 +2673,10 @@ impl StakePool {
                     }
                 };
 
-                let staking_rewards_near_amount = new_staked_balance - validator.get_staked_balance();
+                let staking_rewards_near_amount = new_balance - validator.balance.get_staked_balance();
 
                 validator.last_update_epoch_height = current_epoch_height;
-                validator.balance.classic_total_near_amount += staking_rewards_near_amount;
+                validator.balance.classic_near_amount += staking_rewards_near_amount;
 
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
                 self.validating.quantity_of_validators_updated_in_current_epoch += 1;
