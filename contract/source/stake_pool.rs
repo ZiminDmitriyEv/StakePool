@@ -1469,8 +1469,8 @@ impl StakePool {
                     Old @{} total supply is {} yoctoStNear.
                     Old @{} balance is {} yoctoNear.
                     Received rewards from validators is {} yoctoNear.
-                    Fee is {:?},
-                    Received token amount as fee is {},
+                    Fee is {:?}.
+                    Received token amount as fee is {}.
                     New @{} balance is {} yoctoNear.
                     New @{} total supply is {} yoctoStNear.
                     ",
