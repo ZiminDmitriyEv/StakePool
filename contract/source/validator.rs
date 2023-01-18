@@ -1,4 +1,4 @@
-use near_sdk::{env, EpochHeight, Balance};
+use near_sdk::{env, EpochHeight};
 use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 use super::staking_contract_version::StakingContractVersion;
 use super::validator_balance::ValidatorBalance;
