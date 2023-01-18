@@ -449,7 +449,7 @@ impl StakePool {
 
         let refundable_near_amount = available_for_staking_near_amount - near_amount;
 
-        let (token_amount, near_remainder) = self.convert_near_amount_to_token_amount(near_amount);
+        let (token_amount, remainder_near_amount) = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
             env::panic_str("Insufficient near amount.");
         }
@@ -474,7 +474,7 @@ impl StakePool {
                                                         near_amount,
                                                         refundable_near_amount,
                                                         token_amount,
-                                                        near_remainder,
+                                                        remainder_near_amount,
                                                         self.current_epoch_height,
                                                         storage_staking_price_per_additional_account
                                                     )
@@ -497,7 +497,7 @@ impl StakePool {
             self.fungible_token.total_supply += token_amount;
 
             account_balance.token_amount += token_amount;
-            account_balance.classic_near_amount += near_remainder;
+            account_balance.classic_near_amount += remainder_near_amount;
             if let None = self.fungible_token.account_registry.insert(&predecessor_account_id, &account_balance) {
                 self.fungible_token.accounts_quantity += 1;
             }
@@ -603,7 +603,7 @@ impl StakePool {
         }
         let refundable_near_amount = available_for_staking_near_amount - near_amount;
 
-        let (token_amount, near_remainder) = self.convert_near_amount_to_token_amount(near_amount);
+        let (token_amount, remainder_near_amount) = self.convert_near_amount_to_token_amount(near_amount);
         if token_amount == 0 {
             env::panic_str("Insufficient near deposit.");
         }
@@ -622,7 +622,7 @@ impl StakePool {
                                 attached_deposit,
                                 refundable_near_amount,
                                 token_amount,
-                                near_remainder,
+                                remainder_near_amount,
                                 storage_staking_price_per_additional_accounts
                             )
                     )
@@ -1903,9 +1903,9 @@ impl StakePool {
                             env::panic_str("Nonexecutable code. Near balance should be greater then or equal to investment near balance.");
                         }
 
-                        let (mut investment_near_balance_token_coverage, near_remainder) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
+                        let (mut investment_near_balance_token_coverage, remainder_near_amount) = self.convert_near_amount_to_token_amount(investor_investment.staked_balance);
 
-                        if near_remainder > 0 {
+                        if remainder_near_amount > 0 {
                             investment_near_balance_token_coverage += 1;
                         }
 
@@ -2157,12 +2157,16 @@ impl StakePool {
             return (near_amount, 0);
         }
 
-        let numerator = U256::from(near_amount) * U256::from(self.fungible_token.total_supply);
+        let token_amount = (
+            U256::from(near_amount)
+            * U256::from(self.fungible_token.total_supply)
+            / U256::from(common_balance)
+        ).as_u128();
 
-        (
-            (numerator / U256::from(common_balance)).as_u128(),
-            (numerator % U256::from(common_balance)).as_u128()
-        )
+        let remainder_near_amount = near_amount - self.convert_token_amount_to_near_amount(token_amount);
+
+
+        (token_amount, remainder_near_amount)
     }
 
     fn convert_token_amount_to_near_amount(&self, token_amount: Balance) -> Balance {
