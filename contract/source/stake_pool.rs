@@ -1345,7 +1345,10 @@ impl StakePool {
                             .withdraw(validator.balance.requested_to_withdrawal_near_amount.into())
                             .then(
                                 Self::ext(env::current_account_id())
-                                    .take_unstaked_balance_callback(validator_account_id)
+                                    .take_unstaked_balance_callback(
+                                        validator_account_id,
+                                        validator.balance.requested_to_withdrawal_near_amount
+                                    )
                             )
                     }
                 }
@@ -1394,6 +1397,10 @@ impl StakePool {
 
         let current_epoch_height = env::epoch_height();
 
+        let common_balance_log = self.fund.get_common_balance();
+
+        let total_supply_log = self.fungible_token.total_supply;
+
         if self.validating.validators_quantity > 0 {
             if (self.validating.quantity_of_validators_updated_in_current_epoch / self.validating.validators_quantity == 0)
                 || (self.validating.quantity_of_validators_updated_in_current_epoch % self.validating.validators_quantity != 0) {
@@ -1414,7 +1421,11 @@ impl StakePool {
                 self.reward.previous_epoch_rewards_from_validators_near_amount
             );
 
+            let mut reward_fee_self_log: Option<Fee> = None;
+
             if let Some(ref reward_fee) = self.fee_registry.reward_fee {
+                reward_fee_self_log = Some(reward_fee.self_fee.clone());
+
                 let mut reward_fee_self_token_amount = reward_fee.self_fee.multiply(previous_epoch_rewards_from_validators_token_amount);
                 if reward_fee_self_token_amount != 0 {
                     self.fungible_token.total_supply += reward_fee_self_token_amount;
@@ -1449,6 +1460,36 @@ impl StakePool {
             }
 
             self.reward.previous_epoch_rewards_from_validators_near_amount = 0;
+
+            let current_account_id_log = env::current_account_id();
+            env::log_str(
+                format!(
+                    "
+                    Updating @{} pool from {} epoch to {} epoch.
+                    Old @{} total supply is {} yoctoStNear.
+                    Old @{} balance is {} yoctoNear.
+                    Received rewards from validators is {} yoctoNear.
+                    Fee is {:?},
+                    Received token amount as fee is {},
+                    New @{} balance is {} yoctoNear.
+                    New @{} total supply is {} yoctoStNear.
+                    ",
+                    current_account_id_log,
+                    current_epoch_height - 1,
+                    current_epoch_height,
+                    current_account_id_log,
+                    total_supply_log,
+                    current_account_id_log,
+                    common_balance_log,
+                    previous_epoch_rewards_from_validators_token_amount,
+                    reward_fee_self_log,
+                    self.fungible_token.total_supply - total_supply_log,
+                    current_account_id_log,
+                    self.fund.get_common_balance(),
+                    current_account_id_log,
+                    self.fungible_token.total_supply
+                ).as_str()
+            );
         }
 
         self.fund.is_distributed_on_validators_in_current_epoch = false;
@@ -2482,6 +2523,37 @@ impl StakePool {
                 validator.last_classic_stake_increasing_epoch_height = Some(current_epoch_height);
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
+                let current_account_id_log = env::current_account_id();
+                env::log_str(
+                    format!(
+                        "
+                        Increasing validator stake on validator @{} in {} epoch.
+                        Old @{} classic Near amount on validator is {} yoctoNear.
+                        Old @{} investment Near amount on validator is {} yoctoNear.
+                        Old @{} unstaked Near amount on validator is {} yoctoNear.
+                        Staking on validator with {} yoctoNear.
+                        New @{} classic Near amount on validator is {} yoctoNear.
+                        New @{} investment Near amount on validator is {} yoctoNear.
+                        New @{} unstaked Near amount on validator is {} yoctoNear.
+                        ",
+                        validator_account_id,
+                        env::epoch_height(),
+                        current_account_id_log,
+                        validator.balance.classic_near_amount - near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount,
+                        near_amount,
+                        current_account_id_log,
+                        validator.balance.classic_near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount,
+                    ).as_str()
+                );
+
                 true
             }
             _ => {
@@ -2572,6 +2644,10 @@ impl StakePool {
                     }
                 };
 
+                let classic_near_amount_log = validator.balance.classic_near_amount;
+
+                let investment_near_amount_log = validator.balance.investment_near_amount;
+
                 match stake_decreasing_type {
                     StakeDecreasingType::Classic => {
                         validator.balance.classic_near_amount -= near_amount;
@@ -2603,6 +2679,37 @@ impl StakePool {
                 validator.balance.requested_to_withdrawal_near_amount += near_amount;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
 
+                let current_account_id_log = env::current_account_id();
+                env::log_str(
+                    format!(
+                        "
+                        Requested decreasing validator stake from validator @{} in {} epoch.
+                        Old @{} classic Near amount on validator is {} yoctoNear.
+                        Old @{} investment Near amount on validator is {} yoctoNear.
+                        Old @{} unstaked Near amount on validator is {} yoctoNear.
+                        Requested to unstake from validator is {} yoctoNear.
+                        New @{} classic Near amount on validator is {} yoctoNear.
+                        New @{} investment Near amount on validator is {} yoctoNear.
+                        New @{} unstaked Near amount on validator is {} yoctoNear.
+                        ",
+                        validator_account_id,
+                        env::epoch_height(),
+                        current_account_id_log,
+                        classic_near_amount_log,
+                        current_account_id_log,
+                        investment_near_amount_log,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount - near_amount,
+                        near_amount,
+                        current_account_id_log,
+                        validator.balance.classic_near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount,
+                    ).as_str()
+                );
+
                 CallbackResult {
                     is_success: true,
                     network_epoch_height: env::epoch_height()
@@ -2618,7 +2725,11 @@ impl StakePool {
     }
 
     #[private]
-    pub fn take_unstaked_balance_callback(&mut self, validator_account_id: AccountId) -> CallbackResult {
+    pub fn take_unstaked_balance_callback(
+        &mut self,
+        validator_account_id: AccountId,
+        requested_to_withdrawal_near_amount: Balance
+    ) -> CallbackResult {
         if env::promise_results_count() == 0 {
             env::panic_str("Contract expected a result on the callback.");
         }
@@ -2632,10 +2743,41 @@ impl StakePool {
                     }
                 };
 
-                self.fund.delayed_withdrawn_fund.balance += validator.balance.requested_to_withdrawal_near_amount;
+                self.fund.delayed_withdrawn_fund.balance += requested_to_withdrawal_near_amount;
 
-                validator.balance.requested_to_withdrawal_near_amount = 0;
+                validator.balance.requested_to_withdrawal_near_amount -= requested_to_withdrawal_near_amount;
                 self.validating.validator_registry.insert(&validator_account_id, &validator);
+
+                let current_account_id_log = env::current_account_id();
+                env::log_str(
+                    format!(
+                        "
+                        Taking unstaked balance from validator @{} in {} epoch.
+                        Old @{} classic Near amount on validator is {} yoctoNear.
+                        Old @{} investment Near amount on validator is {} yoctoNear.
+                        Old @{} unstaked Near amount on validator is {} yoctoNear.
+                        Received Near amount from validator is {} yoctoNear.
+                        New @{} classic Near amount on validator is {} yoctoNear.
+                        New @{} investment Near amount on validator is {} yoctoNear.
+                        New @{} unstaked Near amount on validator is {} yoctoNear.
+                        ",
+                        validator_account_id,
+                        env::epoch_height(),
+                        current_account_id_log,
+                        validator.balance.classic_near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount + requested_to_withdrawal_near_amount,
+                        requested_to_withdrawal_near_amount,
+                        current_account_id_log,
+                        validator.balance.classic_near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount
+                    ).as_str()
+                );
 
                 CallbackResult {
                     is_success: true,
@@ -2686,6 +2828,38 @@ impl StakePool {
                 self.validating.quantity_of_validators_updated_in_current_epoch += 1;
 
                 self.reward.previous_epoch_rewards_from_validators_near_amount += staking_rewards_near_amount;
+
+                let current_account_id_log = env::current_account_id();
+                env::log_str(
+                    format!(
+                        "
+                        Updating validator @{} from {} epoch to {} epoch.
+                        Old @{} classic Near amount on validator is {} yoctoNear.
+                        Old @{} investment Near amount on validator is {} yoctoNear.
+                        Old @{} unstaked near amount from validator is {} yoctoNear.
+                        Received on validator Near amount is {} yoctoNear.
+                        New @{} classic Near amount on validator is {} yoctoNear.
+                        New @{} investment Near amount on validator is {} yoctoNear.
+                        New @{} unstaked near amount from validator is {} yoctoNear.
+                        ",
+                        validator_account_id,
+                        current_epoch_height - 1,
+                        current_epoch_height,
+                        current_account_id_log,
+                        validator.balance.classic_near_amount - staking_rewards_near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount,
+                        staking_rewards_near_amount,
+                        current_account_id_log,
+                        validator.balance.classic_near_amount,
+                        current_account_id_log,
+                        validator.balance.investment_near_amount,
+                        current_account_id_log,
+                        validator.balance.requested_to_withdrawal_near_amount
+                    ).as_str()
+                );
 
                 CallbackResult {
                     is_success: true,
