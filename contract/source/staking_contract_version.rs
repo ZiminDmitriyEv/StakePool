@@ -6,6 +6,6 @@ use near_sdk::serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, BorshDeserialize, BorshSerialize)]
 #[serde(crate = "near_sdk::serde")]
 pub enum StakingContractVersion {
-    // https://github.com/near/core-contracts/tree/master/staking-pool
-    Classic
+    /// For https://github.com/near/core-contracts/tree/master/staking-pool contracts.
+    Core
 }

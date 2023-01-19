@@ -9,6 +9,8 @@ use super::storage_key::StorageKey;
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct FungibleToken {
     pub total_supply: Balance,
+    /// Storage.
+    /// AccountId - user account id.
     pub account_registry: LookupMap<AccountId, AccountBalance>,
     pub accounts_quantity: u64,
     pub metadata: LazyOption<FungibleTokenMetadata>,

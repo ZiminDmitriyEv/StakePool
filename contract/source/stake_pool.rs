@@ -32,7 +32,7 @@ use super::fund::Fund;
 use super::fungible_token::FungibleToken;
 use super::investment_withdrawal::InvestmentWithdrawal;
 use super::investor_investment::InvestorInvestment;
-use super::MAXIMUM_NUMBER_OF_TGAS;
+use super::MINIMUM_NUMBER_OF_TGAS;
 use super::MINIMUN_DEPOSIT_AMOUNT;
 use super::reward::Reward;
 use super::shared_fee::SharedFee;
@@ -46,6 +46,8 @@ construct_uint! {
     pub struct U256(4);
 }
 
+/// Classic context - flow for all users. Investment context - flow for investors.
+/// Investor has classic and investment flow. Random user has only classic flow.
 #[near_bindgen]
 #[derive(PanicOnDefault, BorshDeserialize, BorshSerialize)]
 pub struct StakePool {
@@ -62,6 +64,8 @@ pub struct StakePool {
 impl StakePool {
     /// Call-methods:
 
+    /// Provides the ability to pool initialization.
+    /// Available for pool owner.
     #[init]
     #[payable]
     pub fn new(
@@ -86,48 +90,56 @@ impl StakePool {
         )
     }
 
-    /// Stake process.
+    /// Provides the ability to stake into pool.
+    /// Available for all users.
     #[payable]
     pub fn deposit(&mut self, near_amount: U128) -> PromiseOrValue<()> {
         self.internal_deposit(near_amount.into())
     }
 
-    /// Stake process directly to the validator.
-    /// Available only for Investor.
+    /// Provides the ability to stake via pool directly to the validator.
+    /// Available only for investor.
     #[payable]
     pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) -> Promise {
         self.internal_deposit_on_validator(near_amount.into(), validator_account_id)
     }
 
-    /// Instant unstake process.
+    /// Provides the ability to instant unstake.
+    /// Available for all users.
     #[payable]
     pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise {
         self.internal_instant_withdraw(token_amount.into())
     }
 
-    /// Delayed unstake process.
+    /// Provides the ability to delayed unstake.
+    /// Available for all users.
     #[payable]
     pub fn delayed_withdraw(&mut self, token_amount: U128) -> PromiseOrValue<()> {
         self.internal_delayed_withdraw(token_amount.into())
     }
 
-    /// Delayed unstake process directly from validator
-    /// Available only for Investor.
+    /// Delayed unstake process directly from validator.
+    /// Available only for investor.
     #[payable]
     pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) -> PromiseOrValue<()> {
         self.internal_delayed_withdraw_from_validator(near_amount.into(), validator_account_id)
     }
 
+    /// Provides the ability to take unstaked balance after passing the delayed unstake process.
+    /// Available for all users.
     #[payable]
     pub fn take_delayed_withdrawal(&mut self) -> Promise {
         self.internal_take_delayed_withdrawal()
     }
 
+    /// Provides the ability to stake via pool directly to the validator.
+    /// Available only for pool manager.
     pub fn increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: U128) -> Promise {
         self.internal_increase_validator_stake(validator_account_id, near_amount.into())
     }
 
-    /// Validator stake decreasing process for the needs of delayed withdrawal fund.
+    /// Provides the ability to unstake from validator for the needs of delayed withdrawal fund.
+    /// Available only for pool manager.
     pub fn requested_decrease_validator_stake(
         &mut self,
         validator_account_id: AccountId,
@@ -137,18 +149,27 @@ impl StakePool {
         self.internal_requested_decrease_validator_stake(validator_account_id, near_amount.into(), stake_decreasing_type)
     }
 
+    /// Provides the ability to withdraw unstaked balance from validator for the needs of delayed withdrawal fund.
+    /// Available only for pool manager.
     pub fn take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Promise {
         self.internal_take_unstaked_balance(validator_account_id)
     }
 
+    /// Provides the ability to update validator state.
+    /// Available only for pool manager.
     pub fn update_validator(&mut self, validator_account_id: AccountId) -> Promise {
         self.internal_update_validator(validator_account_id)
     }
 
+    /// Provides the ability to update pool state. Must be used after 'updated_validator'
+    /// for each validator.
+    /// Available only for pool manager.
     pub fn update(&mut self) {
         self.internal_update();
     }
 
+    /// Provides the ability to add validator.
+    /// Available only for pool manager.
     #[payable]
     pub fn add_validator(
         &mut self,
@@ -160,39 +181,57 @@ impl StakePool {
         self.internal_add_validator(validator_account_id, staking_contract_version, is_only_for_investment, is_preferred)
     }
 
+    /// Provides the ability to change validator state in context of in investment.
+    /// Available only for pool manager.
     pub fn change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool) {
         self.internal_change_validator_investment_context(validator_account_id, is_only_for_investment);
     }
 
+    /// Provides the ability to change preffered validator.
+    /// Available only for pool manager.
     pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>) {
         self.internal_change_preffered_validator(validator_account_id);
     }
 
+    /// Provides the ability to remove validator.
+    /// Available only for pool manager.
     pub fn remove_validator(&mut self, validator_account_id: AccountId) -> Promise {
         self.internal_remove_validator(validator_account_id)
     }
 
+    /// Provides the ability to add investor.
+    /// Available only for pool manager.
     #[payable]
     pub fn add_investor(&mut self, investor_account_id: AccountId) -> PromiseOrValue<()> {
         self.internal_add_investor(investor_account_id)
     }
 
+    /// Provides the ability to add investor.
+    /// Available only for pool manager.
     pub fn remove_investor(&mut self, investor_account_id: AccountId) -> Promise {
         self.internal_remove_investor(investor_account_id)
     }
 
+    /// Provides the ability to change pool manager.
+    /// Available only for pool owner and manager.
     pub fn change_manager(&mut self, manager_id: AccountId) {
         self.internal_change_manager(manager_id);
     }
 
+    /// Provides the ability to change reward fee.
+    /// Available only for pool manager.
     pub fn change_reward_fee(&mut self, reward_fee_self: Option<Fee>, reward_fee_partner: Option<Fee>) {
         self.internal_change_reward_fee(reward_fee_self, reward_fee_partner);
     }
 
+    /// Provides the ability to change fee for instant unstake process.
+    /// Available only for pool manager.
     pub fn change_instant_withdraw_fee(&mut self, instant_withdraw_fee_self: Option<Fee>, instant_withdraw_fee_partner: Option<Fee>) {
         self.internal_change_instant_withdraw_fee(instant_withdraw_fee_self, instant_withdraw_fee_partner);
     }
 
+    /// Provides the ability to change state of fund.
+    /// Available only for pool manager.
     pub fn confirm_stake_distribution(&mut self) {
         self.internal_confirm_stake_distribution();
     }
@@ -282,12 +321,12 @@ impl FungibleTokenCore for StakePool {
     #[payable]
     fn ft_transfer_call(
         &mut self,
-        receiver_id: AccountId,
-        amount: U128,
-        memo: Option<String>,
-        msg: String,
+        _receiver_id: AccountId,
+        _amount: U128,
+        _memo: Option<String>,
+        _msg: String,
     ) -> PromiseOrValue<U128> {
-        todo!();
+        todo!("Implementation depends on the needed.");
     }
 
     fn ft_total_supply(&self) -> U128 {
@@ -460,7 +499,7 @@ impl StakePool {
                     match self.validating.validator_registry.get(preffered_validator_account_id) {
                         Some(validator) => {
                             match validator.staking_contract_version {
-                                StakingContractVersion::Classic => {
+                                StakingContractVersion::Core => {
                                     PromiseOrValue::Promise(
                                         classic_validator::ext(preffered_validator_account_id.clone())
                                             .with_attached_deposit(near_amount)
@@ -609,7 +648,7 @@ impl StakePool {
         }
 
         match validator.staking_contract_version {
-            StakingContractVersion::Classic => {
+            StakingContractVersion::Core => {
                 classic_validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
                     .deposit_and_stake()
@@ -1237,7 +1276,7 @@ impl StakePool {
         }
 
         match validator.staking_contract_version {
-            StakingContractVersion::Classic => {
+            StakingContractVersion::Core => {
                 classic_validator::ext(validator_account_id.clone())
                     .with_attached_deposit(near_amount)
                     .deposit_and_stake()
@@ -1304,7 +1343,7 @@ impl StakePool {
         let current_account_id = env::current_account_id();
 
         match validator.staking_contract_version {
-            StakingContractVersion::Classic => {
+            StakingContractVersion::Core => {
                 classic_validator::ext(validator_account_id.clone())
                     .get_account_unstaked_balance(current_account_id.clone())
                     .then(
@@ -1340,7 +1379,7 @@ impl StakePool {
                 }
 
                 match validator.staking_contract_version {
-                    StakingContractVersion::Classic => {
+                    StakingContractVersion::Core => {
                         classic_validator::ext(validator_account_id.clone())
                             .withdraw(validator.balance.requested_to_withdrawal_near_amount.into())
                             .then(
@@ -1371,7 +1410,7 @@ impl StakePool {
                 if validator.last_update_epoch_height < current_epoch_height {
                     let current_account_id = env::current_account_id();
                     match validator.staking_contract_version {
-                        StakingContractVersion::Classic => {
+                        StakingContractVersion::Core => {
                             classic_validator::ext(validator_account_id.clone())
                                 .get_account_total_balance(current_account_id.clone())
                                 .then(
@@ -1793,10 +1832,8 @@ impl StakePool {
         predecessor_account_balance.token_amount -= token_amount;
 
         if let Some(investor_investment) = self.validating.investor_investment_registry.get(&predecessor_account_id) {
-            if (
-                self.convert_token_amount_to_near_amount(predecessor_account_balance.token_amount)
-                + predecessor_account_balance.investment_near_amount
-            ) < investor_investment.staked_balance {
+            if (self.convert_token_amount_to_near_amount(predecessor_account_balance.token_amount) + predecessor_account_balance.investment_near_amount)
+                < investor_investment.staked_balance {
                 env::panic_str("Token amount exceeded the available to transfer token amount.");
             }
         }
@@ -2262,7 +2299,7 @@ impl StakePool {
     }
 
     fn assert_gas_is_enough() {
-        if env::prepaid_gas() < (Gas::ONE_TERA * MAXIMUM_NUMBER_OF_TGAS) {
+        if env::prepaid_gas() < (Gas::ONE_TERA * MINIMUM_NUMBER_OF_TGAS) {
             env::panic_str("Not enough Gas quantity.");
         }
     }
@@ -2595,7 +2632,7 @@ impl StakePool {
                 let needed_to_unstake_near_amount = near_amount - unstaked_remainder;
 
                 match validator.staking_contract_version {
-                    StakingContractVersion::Classic => {
+                    StakingContractVersion::Core => {
                         PromiseOrValue::Promise(
                             classic_validator::ext(validator_account_id.clone())
                                 .unstake(needed_to_unstake_near_amount.into())

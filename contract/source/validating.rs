@@ -9,8 +9,10 @@ use super::validator::Validator;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Validating {
+    /// Storage.
+    /// AccountId - validator account id.
     pub validator_registry: UnorderedMap<AccountId, Validator>,
-    /// Registry of Investors who are allowed to make an deposit/withdrawal directly on/from the validator.
+    /// Registry of investors who are allowed to make an deposit/withdrawal directly on/from the validator.
     pub investor_investment_registry: LookupMap<AccountId, InvestorInvestment>,
     pub validators_quantity: u64,
     pub preffered_validator: Option<AccountId>,
@@ -45,7 +47,7 @@ impl Validating {
         let account_id = get_account_id_with_maximum_length();
 
         validator_registry.insert(
-            &account_id, &Validator::new(StakingContractVersion::Classic, false)
+            &account_id, &Validator::new(StakingContractVersion::Core, false)
         );
 
         env::storage_usage() - initial_storage_usage

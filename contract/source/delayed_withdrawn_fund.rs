@@ -13,11 +13,11 @@ pub struct DelayedWithdrawnFund {
     pub delayed_withdrawal_registry: LookupMap<AccountId, DelayedWithdrawal>,
     /// Storage
     /// AccountId - validator account id.
-    /// Balance - near amount.
+    /// Balance - Near amount.
     pub investment_withdrawal_registry: LookupMap<AccountId, InvestmentWithdrawal>,
-    /// Classic near amount needed to request from the validator.
+    /// Classic Near amount needed to request from the validator.
     pub needed_to_request_classic_near_amount: Balance,
-    /// Investment near amount needed to request from the validator.
+    /// Investment Near amount needed to request from the validator.
     pub needed_to_request_investment_near_amount: Balance,
     /// Near balance available for withdrawal after passing the delayed withdrawal process.
     pub balance: Balance,

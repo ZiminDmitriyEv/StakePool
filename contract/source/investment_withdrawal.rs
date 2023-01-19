@@ -3,7 +3,7 @@ use near_sdk::borsh::{self, BorshDeserialize, BorshSerialize};
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct InvestmentWithdrawal {
-    /// Near balance that the user requested to withdraw.
+    /// Near amount that the user requested to withdraw.
     pub near_amount: Balance,
     /// Id of account who spent funds on storage staking for this structure.
     pub account_id: AccountId

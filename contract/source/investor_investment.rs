@@ -5,8 +5,12 @@ use super::storage_key::StorageKey;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct InvestorInvestment {
+    /// Storage
+    /// AccountId - validator account id.
+    /// Balance - staked Near Amount.
     pub distribution_registry: LookupMap<AccountId, Balance>,
     pub distributions_quantity: u64,
+    /// Total Near amount distributed on validators.
     pub staked_balance: Balance
 }
 

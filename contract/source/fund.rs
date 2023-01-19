@@ -4,11 +4,15 @@ use super::delayed_withdrawn_fund::DelayedWithdrawnFund;
 
 #[derive(BorshDeserialize, BorshSerialize)]
 pub struct Fund {
+    /// Near amount available in the pool that should be staked on validators in classic context.
     pub classic_unstaked_balance: Balance,
+    /// Near amount already staked on validators in classic context.
     pub classic_staked_balance: Balance,
-    /// Additional funds to ensure the possibility of instant withdrawal.
+    /// Additional Near amount to ensure the possibility of instant withdrawal.
     pub classic_liquidity_balance: Balance,
+    /// Near amount already staked on validators in investment context.
     pub investment_staked_balance: Balance,
+    /// Fund that should be returned to users.
     pub delayed_withdrawn_fund: DelayedWithdrawnFund,
     pub is_distributed_on_validators_in_current_epoch: bool
 }
