@@ -20,6 +20,6 @@ impl InvestorInvestment {
     }
 
     pub fn initialize_distribution_registry(investor_account_id: AccountId) -> LookupMap<AccountId, Balance> {
-        LookupMap::new(StorageKey::DistributionRegistry { investor_account_id })
+        LookupMap::new(StorageKey::Distribution { investor_account_id })
     }
 }

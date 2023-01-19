@@ -76,10 +76,10 @@ impl Validating {
     }
 
     fn initialize_validator_registry() -> UnorderedMap<AccountId, Validator> {
-        UnorderedMap::new(StorageKey::ValidatorRegistry)
+        UnorderedMap::new(StorageKey::Validator)
     }
 
     fn initialize_investor_investment_registry() -> LookupMap<AccountId, InvestorInvestment> {
-        LookupMap::new(StorageKey::InvestorRegistry)
+        LookupMap::new(StorageKey::InvestorInvestment)
     }
 }

@@ -81,6 +81,6 @@ impl DelayedWithdrawnFund {
     }
 
     fn initialize_investment_withdrawal_registry() -> LookupMap<AccountId, InvestmentWithdrawal> {
-        LookupMap::new(StorageKey::InvestmentWithdrawalRegisry)
+        LookupMap::new(StorageKey::InvestmentWithdrawal)
     }
 }

@@ -6,13 +6,13 @@ use near_sdk::BorshStorageKey;
 /// The number of options must be less than or equal to 256 (1 byte).
 #[derive(BorshSerialize, BorshStorageKey)]
 pub enum StorageKey {
-    InvestorRegistry,
+    InvestorInvestment,
     FungibleToken,
     FungibleTokenMetadata,
-    ValidatorRegistry,
+    Validator,
     DelayedWithdrawnFund,
-    DistributionRegistry {
+    Distribution {
         investor_account_id: AccountId
     },
-    InvestmentWithdrawalRegisry
+    InvestmentWithdrawal
 }
