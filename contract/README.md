@@ -51,15 +51,15 @@ Initializes staking pool state.
 ```rust
 #[init]
 pub fn new(
-        fungible_token_metadata: FungibleTokenMetadataDto,
-        manager_id: Option<AccountId>,
-        self_fee_receiver_account_id: AccountId,
-        partner_fee_receiver_account_id: AccountId,
-        reward_fee_self: Option<Fee>,
-        reward_fee_partner: Option<Fee>,
-        instant_withdraw_fee_self: Option<Fee>,
-        instant_withdraw_fee_partner: Option<Fee>
-    ) -> Self
+    fungible_token_metadata: FungibleTokenMetadataDto,
+    manager_id: Option<AccountId>,
+    self_fee_receiver_account_id: AccountId,
+    partner_fee_receiver_account_id: AccountId,
+    reward_fee_self: Option<Fee>,
+    reward_fee_partner: Option<Fee>,
+    instant_withdraw_fee_self: Option<Fee>,
+    instant_withdraw_fee_partner: Option<Fee>
+) -> Self
 ```
 
 near deploy --wasmFile ./target/wasm32-unknown-unknown/release/stake_pool.wasm --accountId=pool.testnet --initDeposit=1 --initArgs='{"fungible_token_metadata": {"name": "NAME", "symbol": "SYMBOL", "icon": "ICON", "reference": null, "reference_hash": null, "decimals": 24}, "manager_id": "account0.testnet", "self_fee_receiver_account_id": "account1.testnet", "partner_fee_receiver_account_id": "account2.testnet", "reward_fee_self": {"numerator": 1, "denominator": 100}, "reward_fee_partner": {"numerator": 1, "denominator": 100}, "instant_withdraw_fee_self": {"numerator": 3, "denominator":1000}, "instant_withdraw_fee_partner": {"numerator": 1, "denominator": 5}}'
