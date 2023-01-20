@@ -1,12 +1,3 @@
-
-
-
-
-ПЕРЕЧИТАТЬ ИМЕнитьыы
-
-
-
-
 # Stake pool contract
 
 This contract provides a way for other users to delegate funds to pool of validation nodes.
@@ -15,344 +6,8 @@ There are some different roles:
 - The staking pool contract. An account with the contract that staking pools funds.
 - The staking pool is owned by the `owner` and the `owner` is the general manager of the staking pool.
 - The pool `manager` manages the pool. The `manager` is assigned by the `owner` of the staking pool and can be changed anytime.
-- Delegator accounts (`user1`, `user2`, etc.) - accounts that want to stake their funds with the staking pool.
-
-## Implementation details
-
-The owner can setup such contract with different parameters and start receiving users native tokens.
-Any other user can send their native tokens to the contract and increase the total stake distributed on validators and receive staking pool fungible tokens.
-These users are rewarded by increasing the rate of the staking pool tokens they received, but the contract has the right to charge a commission.
-Then users can withdraw their native tokens after some unlocking period by exchanging staking pool tokens.
-
-The price of a staking pool token defined as the total amount of staked native tokens divided by the the total amount of staking pool token.
-The number of staking pool token is always less than the number of the staked native tokens, so the price of single staking pool token is not less than `1`.
-
-## Initialization
-
-A contract has to be initialized with the following parameters:
-- `manager_id` - `string` the account ID of the contract owner. This account will be able to call owner-only methods. E.g. `owner`
-- `rewards_fee` - `json serialized object` the initial value of the fraction of the reward that the owner charges delegators for staking pool managment.
-- `validators_maximum_quantity` - `integer` - maximum quantity of validators. Can be changed anytime.
-
-During the initialization the contract checks validity of the input and initializes the contract.
-The contract shouldn't have locked balance during the initialization.
-
-## Existing methods:
-- `new`
-
-`call` method.
-
-Initializes staking pool state.
-
-```rust
-#[init]
-pub fn new(
-        manager_id: Option<AccountId>,
-        rewards_fee: Option<Fee>,
-        validators_maximum_quantity: Option<u64>
-    ) -> Self
-```
-
-- `deposit`
-
-Available to the client. `call` method.
-
-The delegator makes a deposit of funds, and receiving pool tokens in return.
-When a delegator account first deposits funds to the contract, the internal account is created and credited with the
-attached amount of unstaked native tokens.
-
-```rust
-#[payable]
-pub fn deposit(
-    &mut self
-)
-```
-
-- `instant_withdraw`
-
-Available to the client. `call` method.
-
-The delegator makes an instant unstake by exchanging the pool tokens he has for native tokens. Native tokens are returned
-to the delegator immediately, so there may be a commission for this action.
-
-```rust
-pub fn instant_withdraw(
-    &mut self,
-    yocto_token_amount: U128
-) -> Promise
-```
-
-- `delayed_withdraw`
-
-Available to the client. `call` method.
-
-The delegator makes an unstake by exchanging the pool tokens he has for native tokens. Native tokens can be returned
-to the delegator only after 8 epochs.
-
-```rust
-#[payable]
-pub fn delayed_withdraw(
-    &mut self,
-    yocto_token_amount: U128
-) -> Promise
-```
-
-- `add_validator`
-
-Available to the manager. `call` method.
-
-Adds the validator to the list of validators to which the pool delegates the available native tokens.
-
-```rust
-#[payable]
-pub fn add_validator(
-    &mut self,
-    account_id: AccountId,
-    staking_contract_version: ValidatorStakingContractVersion,
-    delayed_withdrawal_validator_group: DelayedWithdrawalValidatorGroup
-)
-```
-
-- `remove_validator`
-
-Available to the manager. `call` method.
-
-Removes the validator from the list of validators to which the pool delegates the available native tokens.
-
-```rust
-pub fn remove_validator(
-    &mut self,
-    account_id: AccountId
-) -> Promise
-```
-
-- `increase_validator_stake`
-
-Available to the manager. `call` method.
-
-Distributes native tokens available on the staking pool contract to validator contracts.
-
-```rust
-pub fn increase_validator_stake(
-    &mut self,
-    validator_account_id: AccountId,
-    yocto_near_amount: Balance
-) -> Promise
-```
-
-- `decrease_validator_stake`
-
-Available to the manager. `call` method.
-
-Withdraws native tokens from the validator contract.
-
-```rust
-pub fn decrease_validator_stake(
-    &mut self,
-    validator_account_id: AccountId,
-    yocto_near_amount: Balance
-) -> Promise
-```
-
-- `update_validator_info`
-
-Available to the manager. `call` method.
-
-Updates information about native tokens distributed on validators at the begining of the new epoch.
-
-```rust
-pub fn update_validator_info(
-    &mut self,
-    validator_account_id: AccountId
-) -> Promise
-```
-
-- `update`
-
-Available to the manager. `call` method.
-
-Updates information about staking pool itself.
-This should be done immediately after updating information about all validators by method `update_validator_info`.
-
-```rust
-pub fn update(
-    &mut self
-)
-```
-
-- `change_manager`
-
-Available to the owner or manager. `call` method.
-
-Changes staking pool manager.
-
-```rust
-pub fn change_manager(
-    &mut self,
-    manager_id: AccountId
-)
-```
-
-- `change_rewards_fee`
-
-Available to the manager. `call` method.
-
-Changes pool comission charged from the reward received from validator.
-
-```rust
-pub fn change_rewards_fee(
-    &mut self,
-    rewards_fee: Option<Fee>
-)
-```
-
-- `is_account_registered`
-
-Available to the client. `view` method.
-
-Checks for token account existing in staking pool.
-
-```rust
-pub fn is_account_registered(
-    &self,
-    account_id: AccountId
-) -> bool
-```
-
-- `get_total_token_supply`
-
-Available to the client. `view` method.
-
-Checks quantity of total minted staking pool tokens.
-
-```rust
-pub fn get_total_token_supply(
-    &self
-) -> U128
-```
-
-- `get_stakers_quantity`
-
-Available to the client. `view` method.
-
-Checks quantity of stakers - users, wich holds staking pool tokens.
-
-```rust
-pub fn get_stakers_quantity(
-    &self
-) -> u64
-```
-
-- `get_storage_staking_price_per_additional_token_account`
-
-Available to the client. `view` method.
-
-Checks quantity of native tokens needed to register additional token account.
-
-```rust
-pub fn get_storage_staking_price_per_additional_token_account(
-    &self
-) -> U128
-```
-
-- `get_yocto_token_amount_from_yocto_near_amount`
-
-Available to the client. `view` method.
-
-Checks quantity of staking pool tokens wich he can receive from the given number of native tokens.
-
-```rust
-pub fn get_yocto_token_amount_from_yocto_near_amount(
-    &self,
-    yocto_near_amount: U128
-) -> U128
-```
-
-- `get_yocto_near_amount_from_yocto_token_amount`
-
-Available to the client. `view` method.
-
-Checks quantity of native tokens wich he can receive from the given number of staking pool tokens.
-
-```rust
-pub fn get_yocto_near_amount_from_yocto_token_amount(
-    &self,
-    yocto_token_amount: U128
-) -> U128
-```
-
-- `get_token_account_balance`
-
-Available to the client. `view` method.
-
-Checks quantity of staking pool tokens wich he holds.
-
-```rust
-pub fn get_token_account_balance(
-    &self,
-    account_id: AccountId
-) -> U128
-```
-
-- `get_unstaked_balance`
-
-Available to the client. `view` method.
-
-Checks quantity of native tokens in staking pool wich is not distributed on validators yet.
-
-```rust
-pub fn get_unstaked_balance(
-    &self
-) -> U128
-```
-
-- `get_staked_balance`
-
-Available to the client. `view` method.
-
-Checks quantity of native tokens in staking pool wich already distributed on validators.
-
-```rust
-pub fn get_staked_balance(
-    &self
-) -> U128
-```
-
-- `get_management_fund_amount`
-
-Available to the client. `view` method.
-
-Checks quantity of native tokens under staking pool management.
-
-```rust
-pub fn get_management_fund_amount(
-    &self
-) -> U128
-```
-
-- `get_fee_registry`
-
-Available to the client. `view` method.
-
-Receives information about existing in staking pool comissions.
-
-```rust
-pub fn get_fee_registry(
-    &self
-) -> FeeRegistry
-```
-
-- `get_aggregated_information`
-
-Available to the client. `view` method.
-
-Receives information in convenient way.
-
-```rust
-pub fn get_aggregated_information(
-    &self
-) -> AggregatedInformation
-```
+- Delegator accounts - accounts that want to stake their funds with the staking pool.
+- Delegator accounts can become an `investor`.
 
 ## Reward distribution
 
@@ -376,32 +31,390 @@ It also has inner invariants:
 - The comission is a fraction be from `0` to `1` inclusive.
 - The owner can't withdraw funds from other delegators.
 
-## Some usage example
+## Implementation details
 
-```bash
-near deploy --wasmFile=./target/wasm32-unknown-unknown/release/stake_pool.wasm --accountId=stake.pool.testnet --initArgs='{"manager_id":"manager.testnet", "rewards_fee":{"numerator": _, "denominator":_}, "validators_maximum_quantity":_}'
+The owner can setup such contract with different parameters and start receiving users native tokens.
+Any other user can send their native tokens to the contract and increase the total stake distributed on validators and receive staking pool fungible tokens.
+These users are rewarded by increasing the rate of the staking pool tokens they received, but the contract has the right to charge a commission.
+Then users can withdraw their native tokens after some unlocking period by exchanging staking pool tokens.
+
+The price of a staking pool token defined as the total amount of staked native tokens divided by the the total amount of staking pool token.
+The number of staking pool token is always less than the number of the staked native tokens, so the price of single staking pool token is not less than `1`.
+
+## Existing `call` methods:
+- `new`
+
+Available for pool owner.
+
+Initializes staking pool state.
+
+```rust
+#[init]
+pub fn new(
+        fungible_token_metadata: FungibleTokenMetadataDto,
+        manager_id: Option<AccountId>,
+        self_fee_receiver_account_id: AccountId,
+        partner_fee_receiver_account_id: AccountId,
+        reward_fee_self: Option<Fee>,
+        reward_fee_partner: Option<Fee>,
+        instant_withdraw_fee_self: Option<Fee>,
+        instant_withdraw_fee_partner: Option<Fee>
+    ) -> Self
 ```
 
-```bash
-near call stake.pool.testnet add_validator '{"account_id":"_","staking_contract_version":"_", "delayed_withdrawal_validator_group":"_" }' --accountId=manager.testnet --deposit=1
-```
+near deploy --wasmFile ./target/wasm32-unknown-unknown/release/stake_pool.wasm --accountId=pool.testnet --initDeposit=1 --initArgs='{"fungible_token_metadata": {"name": "NAME", "symbol": "SYMBOL", "icon": "ICON", "reference": null, "reference_hash": null, "decimals": 24}, "manager_id": "account0.testnet", "self_fee_receiver_account_id": "account1.testnet", "partner_fee_receiver_account_id": "account2.testnet", "reward_fee_self": {"numerator": 1, "denominator": 100}, "reward_fee_partner": {"numerator": 1, "denominator": 100}, "instant_withdraw_fee_self": {"numerator": 3, "denominator":1000}, "instant_withdraw_fee_partner": {"numerator": 1, "denominator": 5}}'
 
-```bash
-near call stake.pool.testnet increase_validator_stake '{"validator_account_id":"_", "yocto_near_amount":_}' --accountId=manager.testnet --gas=300000000000000
-```
+- `deposit`
 
-```bash
-near call stake.pool.testnet update_validator_info '{"validator_account_id":"_"}' --accountId=manager.testnet --gas=300000000000000
-```
+Available for all users.
 
-```bash
-near call stake.pool.testnet deposit --deposit=1 --accountId=_
-```
+The delegator makes a deposit of funds, and receiving pool tokens in return.
+When a delegator account first deposits funds to the contract, the internal account is created and credited with the
+`near_amount` native tokens. The attached deposit must be greater than `near_amount` to hide the storage staking,
+with the excess fund being refunded.
 
-```bash
-near call stake.pool.testnet instant_withdraw '{"yocto_token_amount":"_"}' --accountId=_
+```rust
+#[payable]
+pub fn deposit(&mut self, near_amount: U128) -> PromiseOrValue<()>
 ```
+near call pool.testnet deposit '{"near_amount": "10000000000000000000000000"}' --deposit=2 --accountId=account3.testnet --gas=300000000000000
 
-```bash
-near view stake.pool.testnet get_token_account_balance '{"account_id":_}'
+- `deposit_on_validator`
+
+Available for investors.
+
+The delegator makes a deposit of funds via pool directly on validator, and receiving pool tokens in return.
+When a delegator account first deposits funds to the contract, the internal account is created and credited with the
+`near_amount` native tokens. The attached deposit must be greater than `near_amount` to hide the storage staking,
+with the excess fund being refunded.
+
+```rust
+#[payable]
+pub fn deposit_on_validator(&mut self, near_amount: U128, validator_account_id: AccountId) -> Promise
 ```
+near call pool.testnet deposit_on_validator '{"near_amount": "1000000000000000000000000", "validator_account_id": "legends.pool.f863973.m0"}' --accountId=account3.testnet --deposit=2 --gas=300000000000000
+
+- `instant_withdraw`
+
+Available for all users.
+
+The delegator makes an instant unstake by exchanging the pool tokens he has for native tokens. Native tokens are returned
+to the delegator immediately, so there may be a commission for this action.
+
+```rust
+#[payable]
+pub fn instant_withdraw(&mut self, token_amount: U128) -> Promise
+```
+near call pool.testnet instant_withdraw '{"token_amount":"1000000000000000000000000"}' --accountId=account3.testnet --deposit=1 --gas=300000000000000
+
+- `delayed_withdraw`
+
+Available for all users.
+
+The delegator makes an unstake by exchanging the pool tokens he has for native tokens. Native tokens can be returned
+to the delegator only after 8 epochs.
+
+```rust
+#[payable]
+pub fn delayed_withdraw(&mut self, token_amount: U128) -> PromiseOrValue<()>
+```
+near call pool.testnet delayed_withdraw '{"token_amount": "1000000000000000000000000"}' --accountId=account3.testnet --deposit=1 --gas=300000000000000
+
+- `delayed_withdraw_from_validator`
+
+Available for investors.
+
+The delegator makes an unstake via pool directly from validator by exchanging the pool tokens he has for native tokens. Native tokens can be returned
+to the delegator only after 8 epochs.
+
+```rust
+#[payable]
+pub fn delayed_withdraw_from_validator(&mut self, near_amount: U128, validator_account_id: AccountId) -> PromiseOrValue<()>
+```
+near call pool.testnet delayed_withdraw_from_validator '{"near_amount": "1000000000000000000000000", "validator_account_id": "legends.pool.f863973.m0"}' --accountId=account3.testnet --deposit=1 --gas=300000000000000
+
+- `take_delayed_withdrawal`
+
+Available for all users.
+
+The delegator takes Native tokens he requested after passing the delayed unstake process.
+
+```rust
+#[payable]
+pub fn take_delayed_withdrawal(&mut self) -> Promise
+```
+near call pool.testnet take_delayed_withdrawal --accountId=account3.testnet --deposit=1 --gas=300000000000000
+
+- `increase_validator_stake`
+
+Available for pool manager.
+
+Stakes unstaked funds to the validator.
+
+```rust
+pub fn increase_validator_stake(&mut self, validator_account_id: AccountId, near_amount: U128) -> Promise
+```
+near call pool.testnet increase_validator_stake '{"validator_account_id":"legends.pool.f863973.m0", "near_amount":"1000000000000000000000000"}' --accountId=account0.testnet --gas=300000000000000
+
+- `requested_decrease_validator_stake`
+
+Available for pool manager.
+
+Unstakes staked funds from validator.
+
+```rust
+pub fn requested_decrease_validator_stake(
+    &mut self,
+    validator_account_id: AccountId,
+    near_amount: U128,
+    stake_decreasing_type: StakeDecreasingType
+) -> Promise
+```
+near call pool.testnet requested_decrease_validator_stake '{"validator_account_id":"legends.pool.f863973.m0", "near_amount":"500000000000000000000000", "stake_decreasing_type":"Classic"}' --accountId=account0.testnet --gas=300000000000000
+
+- `take_unstaked_balance`
+
+Available for pool manager.
+
+Takes requested to withdraw balance from validator.
+
+```rust
+pub fn take_unstaked_balance(&mut self, validator_account_id: AccountId) -> Promise
+```
+near call pool.testnet take_unstaked_balance '{"validator_account_id":"legends.pool.f863973.m0"}' --accountId=account0.testnet --gas=300000000000000
+
+- `update_validator`
+
+Available for pool manager.
+
+Updates validator state.
+
+```rust
+pub fn update_validator(&mut self, validator_account_id: AccountId) -> Promise
+```
+near call pool.testnet update_validator '{"validator_account_id":"legends.pool.f863973.m0"}' --accountId=account0.testnet --gas=300000000000000
+
+- `update`
+
+Available for pool manager.
+
+Updates pool state.
+
+```rust
+pub fn update(&mut self)
+```
+near call pool.testnet update --accountId=account0.testnet --gas=300000000000000
+
+- `add_validator`
+
+Available for pool manager.
+
+Adds the validator to the list of validators to which the pool delegates the available native tokens.
+
+```rust
+pub fn add_validator(
+    &mut self,
+    validator_account_id: AccountId,
+    staking_contract_version: StakingContractVersion,
+    is_only_for_investment: bool,
+    is_preferred: bool
+) -> PromiseOrValue<()>
+```
+near call pool.testnet add_validator '{"validator_account_id":"legends.pool.f863973.m0","staking_contract_version":"Core", "is_only_for_investment": false, "is_preferred": true}' --accountId=account0.testnet --deposit=1 --gas=300000000000000
+
+- `change_validator_investment_context`
+
+Available for pool manager.
+
+Changes validator state in contex of investment flow.
+
+```rust
+pub fn change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool)
+```
+near call pool.testnet change_validator_investment_context '{"validator_account_id":"legends.pool.f863973.m0", "is_only_for_investment": false}' --accountId=account0.testnet --gas=300000000000000
+
+- `change_preffered_validator`
+
+Available for pool manager.
+
+Changes preffered validator.
+
+```rust
+pub fn change_preffered_validator(&mut self, validator_account_id: Option<AccountId>)
+```
+near call pool.testnet change_preffered_validator '{"validator_account_id":"legends.pool.f863973.m0", "is_only_for_investment": false}' --accountId=account0.testnet --gas=300000000000000
+
+- `remove_validator`
+
+Available for pool manager.
+
+Removes the validator from the list of validators to which the pool delegates the available native tokens.
+
+```rust
+pub fn remove_validator(&mut self, validator_account_id: AccountId) -> Promise
+```
+near call pool.testnet remove_validator '{"validator_account_id":"legends.pool.f863973.m0"}' --accountId=account0.testnet --gas=300000000000000
+
+- `add_investor`
+
+Available for pool manager.
+
+Adds the user to the list of investors.
+
+```rust
+#[payable]
+pub fn add_investor(&mut self, investor_account_id: AccountId) -> PromiseOrValue<()>
+```
+near call pool.testnet add_investor '{"investor_account_id":"account4.testnet"}' --accountId=account0.testnet --deposit=1 --gas=300000000000000
+
+- `remove_investor`
+
+Available for pool manager.
+
+Remove the user from the list of investors.
+
+```rust
+pub fn remove_investor(&mut self, investor_account_id: AccountId) -> Promise
+```
+near call pool.testnet remove_investor '{"investor_account_id":"account4.testnet"}' --accountId=account0.testnet --deposit=1 --gas=300000000000000
+
+- `change_manager`
+
+Available for pool owner and manager.
+
+Changes pool manager.
+
+```rust
+pub fn change_manager(&mut self, manager_id: AccountId)
+```
+near call pool.testnet change_manager '{"manager_id":"account5.testnet"}' --accountId=account0.testnet --gas=300000000000000
+
+- `change_reward_fee`
+
+Available for pool manager.
+
+Changes fee for validators rewards.
+
+```rust
+pub fn change_reward_fee(&mut self, reward_fee_self: Option<Fee>, reward_fee_partner: Option<Fee>)
+```
+near call pool.testnet change_reward_fee '{"reward_fee_self": {"numerator": 1, "denominator": 100}, "reward_fee_partner": {"numerator": 1, "denominator": 100}}' --accountId=account0.testnet --gas=300000000000000
+
+- `change_instant_withdraw_fee`
+
+Available for pool manager.
+
+Changes fee for instant unstake process.
+
+```rust
+pub fn change_instant_withdraw_fee(&mut self, instant_withdraw_fee_self: Option<Fee>, instant_withdraw_fee_partner: Option<Fee>)
+```
+near call pool.testnet change_instant_withdraw_fee '{"instant_withdraw_fee_self": {"numerator": 1, "denominator": 100}, "instant_withdraw_fee_partner": {"numerator": 1, "denominator": 100}}' --accountId=account0.testnet --gas=300000000000000
+
+- `confirm_stake_distribution`
+
+Available for pool manager.
+
+Confirms stake distributions.
+
+```rust
+pub fn confirm_stake_distribution(&mut self)
+```
+near call pool.testnet confirm_stake_distribution --accountId=account0.testnet --gas=300000000000000
+
+## Existing `view` methods:
+```rust
+pub fn get_delayed_withdrawal_details(&self, account_id: AccountId) -> Option<DelayedWithdrawalDetails>
+```
+near view pool.testnet get_delayed_withdrawal_details '{"account_id": "account6.testnet"}'
+
+
+```rust
+pub fn get_account_balance(&self, account_id: AccountId) -> AccountBalanceDto
+```
+near view pool.testnet get_account_balance '{"account_id": "account6.testnet"}'
+
+
+```rust
+pub fn get_total_token_supply(&self) -> U128
+```
+near view pool.testnet get_total_token_supply
+
+
+```rust
+pub fn get_minimum_deposit_amount(&self) -> U128
+```
+near view pool.testnet get_minimum_deposit_amount
+
+
+```rust
+pub fn get_storage_staking_price(&self) -> StorageStakingPrice
+```
+near view pool.testnet get_storage_staking_price
+
+
+```rust
+pub fn get_storage_staking_requested_coverage(&self, account_id: AccountId) -> StorageStakingRequestedCoverage
+```
+near view pool.testnet get_storage_staking_requested_coverage '{"account_id": "account6.testnet"}'
+
+
+```rust
+pub fn get_fund(&self) -> FundDto
+```
+near view pool.testnet get_fund
+
+```rust
+pub fn get_fee_registry(&self) -> FeeRegistry
+```
+near view pool.testnet get_fee_registry
+
+```rust
+pub fn get_fee_registry_light(&self) -> FeeRegistryLight
+```
+near view pool.testnet get_fee_registry_light
+
+```rust
+pub fn get_current_epoch_height(&self) -> EpochHeightRegistry
+```
+near view pool.testnet get_current_epoch_height
+
+```rust
+pub fn is_stake_distributed(&self) -> bool
+```
+near view pool.testent is_stake_distributed
+
+```rust
+pub fn get_investor_investment(&self, account_id: AccountId) -> Option<InvestorInvestmentDto>
+```
+near view pool.testnet get_investor_investment '{"account_id": "account6.testnet"}'
+
+```rust
+pub fn get_validator_registry(&self) -> Vec<ValidatorDto>
+```
+near view pool.testnet get_validator_registry
+
+```rust
+pub fn get_preffered_validator(&self) -> Option<ValidatorDto>
+```
+near view pool.testnet get_preffered_validator
+
+```rust
+pub fn get_aggregated(&self) -> Aggregated
+```
+near view pool.testnet get_aggregated
+
+```rust
+pub fn get_requested_to_withdrawal_fund(&self) -> RequestedToWithdrawalFund
+```
+near view pool.testnet get_requested_to_withdrawal_fund
+
+```rust
+pub fn get_full(&self) -> Full
+```
+near view pool.testnet get_full
+
+```rust
+pub fn get_full_for_account(&self, account_id: AccountId) -> FullForAccount
+```
+near view pool.testnet get_full for account '{"account_id": "account6.testnet"}'
