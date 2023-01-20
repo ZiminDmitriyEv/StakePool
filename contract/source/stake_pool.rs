@@ -1498,8 +1498,6 @@ impl StakePool {
                 }
             }
 
-            self.reward.previous_epoch_rewards_from_validators_near_amount = 0;
-
             let current_account_id_log = env::current_account_id();
             env::log_str(
                 format!(
@@ -1520,7 +1518,7 @@ impl StakePool {
                     total_supply_log,
                     current_account_id_log,
                     common_balance_log,
-                    previous_epoch_rewards_from_validators_token_amount,
+                    self.reward.previous_epoch_rewards_from_validators_near_amount,
                     reward_fee_self_log,
                     self.fungible_token.total_supply - total_supply_log,
                     current_account_id_log,
@@ -1529,6 +1527,8 @@ impl StakePool {
                     self.fungible_token.total_supply
                 ).as_str()
             );
+
+            self.reward.previous_epoch_rewards_from_validators_near_amount = 0;
         }
 
         self.fund.is_distributed_on_validators_in_current_epoch = false;
