@@ -1,6 +1,6 @@
 # Stake pool contract
 
-This contract provides a way for other users to delegate funds to pool of validation nodes.
+This contract provides a way for other users to delegate funds to a pool of validation nodes.
 
 There are some different roles:
 - The staking pool contract. An account with the contract that staking pools funds.
@@ -11,7 +11,7 @@ There are some different roles:
 
 ## Reward distribution
 
-The reward is distributed by increasing the exchange rate of the pool's native token at the begining of each epoch.
+The reward is distributed by increasing the exchange rate of the pool's native token at the beginning of each epoch.
 
 Every epoch validators bring rewards to the pool. So, at the beginning of each epoch, the pool synchronizes and updates the information about the native tokens under management from all validators and calculates a new exchange rate for the native token.
 
@@ -33,12 +33,12 @@ It also has inner invariants:
 
 ## Implementation details
 
-The owner can setup such contract with different parameters and start receiving users native tokens.
+The owner can set up such contract with different parameters and start receiving users native tokens.
 Any other user can send their native tokens to the contract and increase the total stake distributed on validators and receive staking pool fungible tokens.
 These users are rewarded by increasing the rate of the staking pool tokens they received, but the contract has the right to charge a commission.
 Then users can withdraw their native tokens after some unlocking period by exchanging staking pool tokens.
 
-The price of a staking pool token defined as the total amount of staked native tokens divided by the the total amount of staking pool token.
+The price of a staking pool token defined as the total amount of staked native tokens divided by the total amount of staking pool token.
 The number of staking pool token is always less than the number of the staked native tokens, so the price of single staking pool token is not less than `1`.
 
 ## Existing `call` methods:
@@ -83,7 +83,7 @@ near call pool.testnet deposit '{"near_amount": "10000000000000000000000000"}' -
 
 Available for investors.
 
-The delegator makes a deposit of funds via pool directly on validator, and receiving pool tokens in return.
+The delegator makes a deposit of funds via pool directly to validator, and receiving pool tokens in return.
 When a delegator account first deposits funds to the contract, the internal account is created and credited with the
 `near_amount` native tokens. The attached deposit must be greater than `near_amount` to hide the storage staking,
 with the excess fund being refunded.
@@ -226,7 +226,7 @@ near call pool.testnet add_validator '{"validator_account_id":"legends.pool.f863
 
 Available for pool manager.
 
-Changes validator state in contex of investment flow.
+Changes validator state in context of investment flow.
 
 ```rust
 pub fn change_validator_investment_context(&mut self, validator_account_id: AccountId, is_only_for_investment: bool)
