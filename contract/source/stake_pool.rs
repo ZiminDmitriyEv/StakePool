@@ -2856,7 +2856,7 @@ impl StakePool {
                     }
                 };
 
-                let staking_rewards_near_amount = new_balance - validator.balance.get_staked_balance();
+                let staking_rewards_near_amount = new_balance - validator.balance.get_balance();
 
                 validator.last_update_epoch_height = current_epoch_height;
                 validator.balance.classic_near_amount += staking_rewards_near_amount;

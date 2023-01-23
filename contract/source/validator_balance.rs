@@ -12,7 +12,7 @@ pub struct ValidatorBalance {
 }
 
 impl ValidatorBalance {
-    pub fn get_staked_balance(&self) -> Balance {
-        self.classic_near_amount + self.investment_near_amount
+    pub fn get_balance(&self) -> Balance {
+        self.classic_near_amount + self.investment_near_amount + self.requested_to_withdrawal_near_amount
     }
 }
